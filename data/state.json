@@ -1,5 +1,5 @@
 {
-  "capital": 9999.682682119395,
+  "capital": 9999.402935370535,
   "peakCapital": 10000,
   "openPositions": {},
   "params": {
@@ -16,18 +16,24 @@
   "mode": "normal",
   "observationUntil": null,
   "cooldowns": {
-    "SOL": 1774189704459,
-    "BNB": 1774189620687,
-    "ETH": 1774189678701,
-    "BTC": 1774190587304
+    "SOL": 1774192368002,
+    "BNB": 1774193696335,
+    "ETH": 1774193652341,
+    "BTC": 1774197197521
   },
   "recentLossBySymbol": {
-    "SOL": 2,
-    "BNB": 2,
-    "ETH": 1,
-    "BTC": 1
+    "SOL": 3,
+    "BNB": 3,
+    "ETH": 3,
+    "BTC": 3
   },
   "winRateBuffer": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
     false,
     false,
     false,
@@ -100,17 +106,19 @@
   "lastPaperHourSummaryAt": 0,
   "lastPaperVerdictAt": 0,
   "lastDailyReportAt": 1774189183479,
-  "LIVE_TRADING": false,
+  "LIVE_TRADING": true,
   "backtestSummary": {
-    "sharpeRatio": 0,
-    "maxDrawdown": 1
+    "sharpeRatio": -7.2734285481270735,
+    "maxDrawdown": 0.010693344936044005
   },
   "sentimentSummary": {
-    "updatedAt": 1774212784801,
+    "updatedAt": 1774214099535,
     "meanScore": 0
   },
   "correlationSummary": {
-    "updatedAt": 1774210084787,
+    "updatedAt": 1774212389683,
     "openRisk": 0
-  }
+  },
+  "setupCooldowns": {},
+  "setupStopoutCounts": {}
 }

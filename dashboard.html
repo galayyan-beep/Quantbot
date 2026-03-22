@@ -732,16 +732,19 @@
       </div>
       <div class="top-metrics">
         <div class="pill"><span class="pill-label">Balance</span><span class="pill-value" id="balancePill">-</span></div>
+        <div class="pill"><span class="pill-label">Capital Available</span><span class="pill-value" id="availablePill">-</span></div>
         <div class="pill"><span class="pill-label">P&amp;L</span><span class="pill-value" id="pnlPill">-</span></div>
         <div class="pill"><span class="pill-label">Win Rate</span><span class="pill-value" id="winRatePill">-</span></div>
         <div class="pill"><span class="pill-label">Trades</span><span class="pill-value" id="tradesPill">-</span></div>
         <div class="pill"><span class="pill-label">Open Positions</span><span class="pill-value" id="openPositionsPill">-</span></div>
+        <div class="pill"><span class="pill-label">Active Account</span><span class="pill-value" id="accountPill">-</span></div>
       </div>
     </header>
 
     <div class="nav-row">
       <div class="tabs" id="tabs">
         <button class="tab active" data-tab="markets">Markets</button>
+        <button class="tab" data-tab="watchlist">Watchlist</button>
         <button class="tab" data-tab="positions">Positions</button>
         <button class="tab" data-tab="trades">Trades</button>
         <button class="tab" data-tab="optimizer">Optimizer</button>
@@ -806,6 +809,21 @@
           </div>
         </section>
 
+        <section class="tab-panel" id="panel-watchlist">
+          <div class="panel">
+            <div class="panel-titlebar">
+              <div>
+                <div class="panel-title">Bot Watchlist</div>
+                <div class="panel-kicker">What the bot is evaluating right now across every monitored symbol</div>
+              </div>
+              <div class="small-meta" id="watchlistMeta">Loading watchlist</div>
+            </div>
+            <div class="table-wrap">
+              <table class="terminal-table" id="watchlistTable"></table>
+            </div>
+          </div>
+        </section>
+
         <section class="tab-panel" id="panel-trades">
           <div class="panel">
             <div class="panel-titlebar">
@@ -861,6 +879,17 @@
       </main>
 
       <aside class="side-stack">
+        <section class="panel">
+          <div class="panel-titlebar">
+            <div>
+              <div class="panel-title">Capital Account</div>
+              <div class="panel-kicker">Live broker account and broker-side open positions</div>
+            </div>
+            <div class="small-meta" id="capitalMeta">Waiting for broker snapshot</div>
+          </div>
+          <div id="capitalAccountPanel"></div>
+        </section>
+
         <section class="panel activity-panel">
           <div class="panel-titlebar">
             <div>
@@ -1153,8 +1182,15 @@
           `).join('')}
         </tbody>`;
 
-      const equity = Number(state?.capital ?? perf?.capital ?? STARTING_CAPITAL);
-      const pnl = equity - STARTING_CAPITAL;
+      const capitalSnapshot = window.__lastDashboardSnapshot?.capitalAccount || {};
+      const activeAccount = capitalSnapshot?.activeAccount || {};
+      const hasBrokerBalance = Number.isFinite(Number(activeAccount.balance));
+      const equity = hasBrokerBalance
+        ? Number(activeAccount.balance)
+        : Number(state?.capital ?? perf?.capital ?? STARTING_CAPITAL);
+      const pnl = hasBrokerBalance
+        ? Number(activeAccount.profitLoss || 0)
+        : equity - STARTING_CAPITAL;
       const exposure = computeExposure(state?.openPositions || {});
       document.getElementById('heroEquity').textContent = fmtMoney(equity);
       document.getElementById('heroDrawdown').textContent = fmtPct((perf?.drawdown || 0) / 100);
@@ -1207,6 +1243,89 @@
             </tbody>
           </table>
         </div>`;
+    }
+
+    function buildCapitalAccount(snapshot, capitalLive) {
+      const panel = document.getElementById('capitalAccountPanel');
+      const capital = capitalLive?.capitalAccount?.connected
+        ? capitalLive.capitalAccount
+        : (snapshot?.capitalAccount || {});
+      const active = capital?.activeAccount || {};
+      const brokerPositions = Array.isArray(capital?.positions) ? capital.positions : [];
+
+      if (!capital.connected) {
+        document.getElementById('capitalMeta').textContent = capital?.error ? 'Broker snapshot unavailable' : 'No broker session detected';
+        panel.innerHTML = `<div class="empty-state">${capital?.error || 'Broker account snapshot not available yet. Keep the bot running and reload the page.'}</div>`;
+        return;
+      }
+
+      document.getElementById('capitalMeta').textContent = `${brokerPositions.length} broker position(s) | account ${capital.activeAccountId || '-'}`;
+      panel.innerHTML = `
+        <div class="stack-list">
+          <div class="mini-card">
+            <div class="mini-card-title">Account Snapshot</div>
+            <div class="mini-grid">
+              <div class="line-item"><span>Active</span><strong>${capital.activeAccountId || '-'}</strong></div>
+              <div class="line-item"><span>Target</span><strong>${capital.targetAccountId || '-'}</strong></div>
+              <div class="line-item"><span>Balance</span><strong>${fmtMoney(active.balance)}</strong></div>
+              <div class="line-item"><span>Available</span><strong>${fmtMoney(active.available)}</strong></div>
+              <div class="line-item"><span>Deposit</span><strong>${fmtMoney(active.deposit)}</strong></div>
+              <div class="line-item"><span>P/L</span><strong class="${toneClass(active.profitLoss)}">${fmtSignedMoney(active.profitLoss)}</strong></div>
+            </div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-card-title">Broker Positions</div>
+            ${brokerPositions.length ? `
+              <div class="stack-list">
+                ${brokerPositions.slice(0, 8).map(position => `
+                  <div class="line-item">
+                    <span>${position.symbol || position.epic || 'Position'} ${position.direction || ''}</span>
+                    <strong>${fmtPlain(position.size, 4)} @ ${fmtPlain(position.level, position.level > 999 ? 2 : 4)}</strong>
+                  </div>`).join('')}
+              </div>` : '<div class="empty-state">No broker-side open positions</div>'}
+          </div>
+        </div>`;
+    }
+
+    function buildWatchlist(snapshot) {
+      const table = document.getElementById('watchlistTable');
+      const watchlist = snapshot?.botView?.watchlist || [];
+      document.getElementById('watchlistMeta').textContent = watchlist.length ? watchlist.length + ' symbols under review' : 'No watchlist data';
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th style="width: 12%;">Symbol</th>
+            <th style="width: 9%;">Price</th>
+            <th style="width: 10%;">Regime</th>
+            <th style="width: 14%;">Signal</th>
+            <th style="width: 10%;">Threshold</th>
+            <th style="width: 12%;">Decision</th>
+            <th style="width: 8%;">Sentiment</th>
+            <th style="width: 25%;">What Bot Sees</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${watchlist.map(row => `
+            <tr>
+              <td>
+                <div class="market-symbol">${row.symbol}</div>
+                <div class="market-name">${row.category || 'asset'} | ${row.marketStatus || 'unknown'}</div>
+              </td>
+              <td>${fmtPlain(row.latestPrice, row.latestPrice > 999 ? 2 : 4)}</td>
+              <td><span class="badge ${row.regime === 'trending' ? 'good' : row.regime === 'choppy' ? 'warn' : 'neutral'}">${row.regime || 'normal'}</span></td>
+              <td>
+                <span class="badge ${row.signalDirection === 'long' ? 'good' : row.signalDirection === 'short' ? 'bad' : 'neutral'}">${row.signalDirection || 'neutral'} ${fmtPlain(row.signalScore, 0)}</span>
+                <div class="market-name">${fmtPlain(row.activeSignals, 0)} active</div>
+              </td>
+              <td>${fmtPlain(row.signalScore, 0)}/${fmtPlain(row.minScore, 0)}<br><span class="muted">${fmtPlain(row.activeSignals, 0)}/${fmtPlain(row.minActiveSignals, 0)} signals</span></td>
+              <td><span class="badge ${row.decision?.tone === 'good' ? 'good' : row.decision?.tone === 'warn' ? 'warn' : row.decision?.tone === 'bad' ? 'bad' : 'neutral'}">${row.decision?.label || 'unknown'}</span></td>
+              <td class="${toneClass(row.sentimentScore)}">${fmtPlain(row.sentimentScore, 2)}</td>
+              <td>
+                ${row.decision?.reason || '-'}
+                <div class="market-name">${(row.reasons || []).slice(0, 3).join(' · ') || 'No active signal reasons'}</div>
+              </td>
+            </tr>`).join('')}
+        </tbody>`;
     }
 
     function buildTrades(trades) {
@@ -1317,21 +1436,36 @@
         </article>`).join('');
     }
 
-    function applySummary(state, perf, trades) {
-      const equity = Number(state?.capital ?? perf?.capital ?? STARTING_CAPITAL);
-      const pnl = equity - STARTING_CAPITAL;
+    function applySummary(state, perf, trades, snapshot, capitalLive) {
+      window.__lastDashboardSnapshot = snapshot || {};
+      const capital = capitalLive?.capitalAccount?.connected
+        ? capitalLive.capitalAccount
+        : (snapshot?.capitalAccount || {});
+      const active = capital?.activeAccount || {};
+      const hasBrokerBalance = Number.isFinite(Number(active.balance));
+      const equity = hasBrokerBalance
+        ? Number(active.balance)
+        : Number(state?.capital ?? perf?.capital ?? STARTING_CAPITAL);
+      const pnl = hasBrokerBalance
+        ? Number(active.profitLoss || 0)
+        : equity - STARTING_CAPITAL;
       const winRate = Number(perf?.winRate || 0);
       const tradeCount = Number(perf?.totalTrades || trades?.length || 0);
       const openCount = Object.keys(state?.openPositions || {}).length;
       document.getElementById('balancePill').textContent = fmtMoney(equity);
+      document.getElementById('availablePill').textContent = fmtMoney(active.available);
       document.getElementById('pnlPill').textContent = fmtSignedMoney(pnl);
       document.getElementById('winRatePill').textContent = fmtPct(winRate);
       document.getElementById('tradesPill').textContent = fmtPlain(tradeCount, 0);
       document.getElementById('openPositionsPill').textContent = fmtPlain(openCount, 0);
+      document.getElementById('accountPill').textContent = capital?.activeAccountId || '-';
       document.getElementById('pnlPill').className = 'pill-value ' + toneClass(pnl);
       document.getElementById('liveState').textContent = state?.LIVE_TRADING ? 'LIVE trading terminal' : 'Paper trading terminal';
       document.getElementById('footerMode').textContent = 'Mode: ' + String(state?.mode || 'normal').toUpperCase();
-      document.getElementById('updatedAt').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      const liveStamp = capitalLive?.fetchedAt ? new Date(capitalLive.fetchedAt).toLocaleTimeString() : null;
+      document.getElementById('updatedAt').textContent = liveStamp
+        ? 'Updated ' + liveStamp + ' (Capital live)'
+        : 'Updated ' + new Date().toLocaleTimeString();
     }
 
     function activateTab(tabName) {
@@ -1342,7 +1476,7 @@
     }
 
     async function refresh() {
-      const [state, perf, trades, sentiment, corr, signals, candles, instruments, backtest] = await Promise.all([
+      const [state, perf, trades, sentiment, corr, signals, candles, instruments, backtest, snapshot, capitalLive] = await Promise.all([
         getJson('data/state.json'),
         getJson('data/performance.json'),
         getJson('data/trades.json'),
@@ -1352,12 +1486,16 @@
         getJson('data/candles.json'),
         getJson('data/instruments.json'),
         getJson('data/backtest_results.json'),
+        getJson('data/dashboard_snapshot.json'),
+        getJson('api/capital-live'),
       ]);
 
       if (state && instruments && !state.instruments) state.instruments = instruments;
-      applySummary(state || {}, perf || {}, trades || []);
+      applySummary(state || {}, perf || {}, trades || [], snapshot || {}, capitalLive || {});
       buildMarketsTable(state || {}, perf || {}, candles || {}, sentiment || {});
+      buildWatchlist(snapshot || {});
       buildPositions(state || {});
+      buildCapitalAccount(snapshot || {}, capitalLive || {});
       buildTrades(trades || []);
       buildOptimizer(state || {}, signals || {}, backtest || {});
       buildSentiment(sentiment || {}, corr || {}, backtest || {});

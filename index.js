@@ -32,6 +32,128 @@ const DEFAULT_PARAMS = {
 };
 
 const sessionStartIdx = {};
+let lastDashboardSnapshotAt = 0;
+
+function isWeekendUtc(timestamp = Date.now()) {
+  const day = new Date(timestamp).getUTCDay();
+  return day === 0 || day === 6;
+}
+
+function isWeekendEligibleSymbol(symbol) {
+  return prices.getInstrumentInfo(symbol)?.category === 'crypto';
+}
+
+function setupFingerprint(symbol, direction, reasons = []) {
+  const normalizedReasons = [...new Set((reasons || []).map(reason => String(reason).split(':')[0]).filter(Boolean))].sort();
+  return [symbol, direction || 'none', normalizedReasons.join('+') || 'no-signal'].join('|');
+}
+
+function higherTimeframeTrend(symbol, candleHistory) {
+  const candles = candleHistory[symbol] || [];
+  if (candles.length < 60) return { bias: 'neutral', aligned: true, reason: 'insufficient_higher_timeframe_history' };
+  const closes = candles.map(candle => Number(candle.close || 0)).filter(Number.isFinite);
+  const fastPeriod = closes.length >= 144 ? 55 : 21;
+  const slowPeriod = closes.length >= 144 ? 144 : 55;
+  const ema55 = indicators.ema(closes, fastPeriod);
+  const ema144 = indicators.ema(closes, slowPeriod);
+  const lastClose = closes[closes.length - 1] || 0;
+  if (!ema55 || !ema144 || !lastClose) return { bias: 'neutral', aligned: true, reason: 'higher_timeframe_indicators_unavailable' };
+
+  const separation = Math.abs(ema55 - ema144) / lastClose;
+  if (separation < 0.0015) return { bias: 'neutral', aligned: true, reason: 'higher_timeframe_flat' };
+  return ema55 > ema144
+    ? { bias: 'long', aligned: true, reason: `higher_timeframe_bullish_${fastPeriod}_${slowPeriod}` }
+    : { bias: 'short', aligned: true, reason: `higher_timeframe_bearish_${fastPeriod}_${slowPeriod}` };
+}
+
+function effectiveEntryRequirements(symbol, entryReq, higherTf, signal) {
+  const category = prices.getInstrumentInfo(symbol)?.category || 'other';
+  let minScore = entryReq.minScore;
+  let minActiveSignals = entryReq.minActiveSignals;
+  if (entryReq.weekendMode && category === 'crypto' && signal?.direction && higherTf?.bias === signal.direction) {
+    minScore = Math.max(2, minScore - 1);
+    minActiveSignals = Math.max(1, minActiveSignals - 1);
+  }
+  return {
+    ...entryReq,
+    minScore,
+    minActiveSignals,
+  };
+}
+
+async function hydrateStartupHistory(candleHistory) {
+  const broker = prices.getBroker();
+  if (!broker || typeof broker.fetchHistoricalCandles !== 'function') return;
+  const weekendMode = isWeekendUtc();
+  const targetSymbols = weekendMode
+    ? prices.getSymbols().filter(isWeekendEligibleSymbol)
+    : prices.getSymbols();
+  const targetBars = weekendMode ? 180 : 90;
+
+  for (const symbol of targetSymbols) {
+    const existing = candleHistory[symbol] || [];
+    if (existing.length >= targetBars) continue;
+    try {
+      const history = await broker.fetchHistoricalCandles(symbol, { resolution: 'MINUTE', max: targetBars });
+      if (history.length) {
+        candleHistory[symbol] = history.slice(-MAX_CANDLE_HIST);
+        sessionStartIdx[symbol] = Math.max(0, candleHistory[symbol].length - 144);
+      }
+    } catch (err) {
+      logger.warn('MAIN', 'Startup history hydration failed', { symbol, error: err.message });
+    }
+  }
+}
+
+function classifyRegime(ind, params) {
+  if (!ind || !ind.close) return 'normal';
+  const close = Number(ind.close || 0);
+  if (!close) return 'normal';
+  const ema8 = Number(ind.ema8 || 0);
+  const ema21 = Number(ind.ema21 || 0);
+  const bandwidth = Number(ind.bb?.bandwidth || 0);
+  const momentum = Number(ind.momentum3 || 0);
+  const trendStrength = Math.abs(ema8 - ema21) / close;
+  const momThreshold = Number(params?.momentumThreshold || 0.003);
+
+  const trending = trendStrength > 0.0025 && Math.abs(momentum) > (momThreshold * 0.8) && bandwidth > 0.008;
+  const choppy = trendStrength < 0.0012 && bandwidth < 0.006;
+  if (trending) return 'trending';
+  if (choppy) return 'choppy';
+  return 'normal';
+}
+
+function adaptiveEntryRequirements(symbol, ind, params) {
+  const baseMinScore = Number(params?.minScore || 3);
+  const regime = classifyRegime(ind, params);
+  const category = prices.getInstrumentInfo(symbol)?.category || 'other';
+  const weekendMode = isWeekendUtc();
+  let minScore = baseMinScore;
+  let minActiveSignals = 2;
+
+  if (regime === 'trending') {
+    minScore = Math.max(2, baseMinScore - 1);
+    minActiveSignals = 1;
+  } else if (regime === 'choppy') {
+    minScore = Math.min(4, baseMinScore + 1);
+    minActiveSignals = 2;
+  }
+
+  if (weekendMode && category === 'crypto') {
+    if (regime === 'choppy') {
+      minScore = Math.max(3, baseMinScore);
+      minActiveSignals = 2;
+    }
+  }
+
+  return {
+    symbol,
+    regime,
+    weekendMode,
+    minScore,
+    minActiveSignals,
+  };
+}
 
 function logEntryBlocked(symbol, reason, extra = {}) {
   logger.info('MAIN', 'Entry blocked', {
@@ -67,6 +189,8 @@ function loadState() {
     if (!saved.instruments) {
       saved.instruments = Object.fromEntries(prices.getSymbols().map(s => [s, { enabled: true, sizeMultiplier: 1.0 }]));
     }
+    if (!saved.setupCooldowns) saved.setupCooldowns = {};
+    if (!saved.setupStopoutCounts) saved.setupStopoutCounts = {};
     return saved;
   }
 
@@ -94,6 +218,8 @@ function loadState() {
     backtestSummary: {},
     sentimentSummary: {},
     correlationSummary: {},
+    setupCooldowns: {},
+    setupStopoutCounts: {},
   };
 }
 
@@ -120,6 +246,8 @@ function persistState(state, candleHistory) {
     backtestSummary: state.backtestSummary,
     sentimentSummary: state.sentimentSummary,
     correlationSummary: state.correlationSummary,
+    setupCooldowns: state.setupCooldowns,
+    setupStopoutCounts: state.setupStopoutCounts,
   });
 
   logger.writeJSON('signals.json', signalsMod.getState());
@@ -128,6 +256,168 @@ function persistState(state, candleHistory) {
   const slim = {};
   for (const [sym, arr] of Object.entries(candleHistory)) slim[sym] = arr.slice(-WARMUP_CANDLES);
   logger.writeJSON('candles.json', slim);
+}
+
+function summarizeWatchDecision({ symbol, instrument, marketStatus, indicator, signal, entryReq, pre, corrGate, mem, sizing, state, higherTf, setupBlockedReason }) {
+  if (state?.openPositions?.[symbol]) return { label: 'OPEN', tone: 'good', reason: 'Position already open' };
+  if (instrument?.enabled === false) return { label: 'DISABLED', tone: 'bad', reason: 'Instrument disabled by optimizer' };
+  if (entryReq?.weekendMode && !isWeekendEligibleSymbol(symbol)) return { label: 'WEEKEND', tone: 'warn', reason: 'Weekend mode trades crypto only' };
+  if (!marketStatus?.isOpen) return { label: 'MARKET CLOSED', tone: 'warn', reason: marketStatus?.status || 'Unknown market status' };
+  if (!indicator || !indicator.atr7) return { label: 'WARMING', tone: 'warn', reason: 'Insufficient indicator data' };
+  if (signal?.blockedBySentiment) return { label: 'BLOCKED', tone: 'bad', reason: 'Sentiment blocks current direction' };
+  if (!signal?.direction) return { label: 'WAITING', tone: 'neutral', reason: 'No direction selected' };
+  if (setupBlockedReason) return { label: 'SETUP COOLDOWN', tone: 'bad', reason: setupBlockedReason };
+  if (higherTf?.bias !== 'neutral' && signal?.direction && higherTf.bias !== signal.direction) return { label: 'HTF MISMATCH', tone: 'warn', reason: higherTf.reason };
+  if (signal.score < entryReq.minScore || signal.activeSignals < entryReq.minActiveSignals) {
+    return { label: 'THRESHOLD', tone: 'warn', reason: `Score ${signal.score}/${entryReq.minScore}, signals ${signal.activeSignals}/${entryReq.minActiveSignals}` };
+  }
+  if (!pre.allowed) return { label: 'GUARD', tone: 'bad', reason: pre.reason };
+  if (!corrGate.allowed) return { label: 'CORRELATION', tone: 'bad', reason: corrGate.reason };
+  if (mem.skip) return { label: 'MEMORY', tone: 'bad', reason: mem.reason };
+  if (!sizing) return { label: 'SIZE BLOCK', tone: 'bad', reason: 'Risk sizing rejected trade' };
+  return { label: 'READY', tone: 'good', reason: 'Meets current entry requirements' };
+}
+
+async function writeDashboardSnapshot(state, candleHistory, indicatorsMap) {
+  const now = Date.now();
+  if (now - lastDashboardSnapshotAt < 10000) return;
+  lastDashboardSnapshotAt = now;
+
+  const broker = prices.getBroker();
+  let capitalAccount = {
+    connected: false,
+    paperTrading: !state.LIVE_TRADING,
+    activeAccountId: null,
+    targetAccountId: process.env.CAPITAL_ACCOUNT_ID || '313428098873906372',
+    activeAccount: null,
+    targetAccount: null,
+    accounts: [],
+    positions: [],
+  };
+
+  if (broker && typeof broker.getAccountSnapshot === 'function' && typeof broker.getOpenPositions === 'function') {
+    try {
+      const [accountSnapshot, positionSnapshot] = await Promise.all([
+        broker.getAccountSnapshot(),
+        broker.getOpenPositions(),
+      ]);
+      capitalAccount = {
+        ...capitalAccount,
+        ...accountSnapshot,
+        positions: positionSnapshot?.positions || [],
+      };
+    } catch (err) {
+      capitalAccount = {
+        ...capitalAccount,
+        error: err.message,
+      };
+    }
+  }
+
+  const drawdown = risk.calcDrawdown(state.capital, state.peakCapital);
+  const watchlist = prices.getSymbols().map(symbol => {
+    const instrument = state.instruments[symbol] || { enabled: true, sizeMultiplier: 1 };
+    const candles = candleHistory[symbol] || [];
+    const latest = candles[candles.length - 1] || null;
+    const indicator = indicatorsMap[symbol] || null;
+    const entryReq = adaptiveEntryRequirements(symbol, indicator, state.params);
+    const signal = indicator ? signalsMod.score(indicator, state.params, symbol) : {
+      direction: null,
+      score: 0,
+      reasons: [],
+      activeSignals: 0,
+      sentimentScore: 0,
+      blockedBySentiment: false,
+    };
+    const marketStatus = prices.getCachedMarketStatus(symbol) || { isOpen: false, status: 'UNKNOWN' };
+    const higherTf = higherTimeframeTrend(symbol, candleHistory);
+    const effectiveReq = effectiveEntryRequirements(symbol, entryReq, higherTf, signal);
+    const fp = memoryMod.fingerprint(indicator, symbol);
+    const mem = memoryMod.checkCondition(fp);
+    const setupKey = setupFingerprint(symbol, signal.direction, signal.reasons);
+    const setupCooldownUntil = Number(state.setupCooldowns?.[setupKey] || 0);
+    const setupBlockedReason = setupCooldownUntil > now ? `Setup cooled down until ${new Date(setupCooldownUntil).toLocaleTimeString()}` : null;
+    const pre = risk.preTradChecks({
+      symbol,
+      direction: signal.direction,
+      openPositions: state.openPositions,
+      drawdown,
+      params: state.params,
+      cooldowns: state.cooldowns,
+      recentLossBySymbol: state.recentLossBySymbol,
+      winRateBuffer: state.winRateBuffer,
+      mode: state.mode,
+    });
+    const corrGate = correlation.canOpen(symbol, state.openPositions);
+    const side = signal.direction === 'long' ? 'buy' : 'sell';
+    const entryPrice = signal.direction ? prices.executionPrice(symbol, side) : null;
+    const sizing = signal.direction && indicator?.atr7
+      ? risk.calcPositionSize(symbol, signal.direction, entryPrice, indicator.atr7, state.params, state.capital, state.openPositions)
+      : null;
+    const decision = summarizeWatchDecision({
+      symbol,
+      instrument,
+      marketStatus,
+      indicator,
+      signal,
+      entryReq: effectiveReq,
+      pre,
+      corrGate,
+      mem,
+      sizing,
+      state,
+      higherTf,
+      setupBlockedReason,
+    });
+
+    return {
+      symbol,
+      category: prices.getInstrumentInfo(symbol)?.category || null,
+      latestPrice: latest?.close ?? null,
+      lastCandleAt: latest?.timestamp || null,
+      marketStatus: marketStatus?.status || null,
+      marketOpen: !!marketStatus?.isOpen,
+      regime: effectiveReq.regime,
+      higherTimeframeBias: higherTf.bias,
+      higherTimeframeReason: higherTf.reason,
+      minScore: effectiveReq.minScore,
+      minActiveSignals: effectiveReq.minActiveSignals,
+      signalDirection: signal.direction,
+      signalScore: signal.score,
+      activeSignals: signal.activeSignals,
+      reasons: signal.reasons || [],
+      sentimentScore: signal.sentimentScore,
+      blockedBySentiment: !!signal.blockedBySentiment,
+      memoryWinRate: mem.winRate,
+      memorySamples: mem.samples || 0,
+      memoryReason: mem.reason,
+      pretradeAllowed: pre.allowed,
+      pretradeReason: pre.reason,
+      correlationAllowed: corrGate.allowed,
+      correlationReason: corrGate.reason,
+      setupKey,
+      setupCooldownUntil: setupCooldownUntil || null,
+      cooldownUntil: Number(state.cooldowns?.[symbol] || 0) || null,
+      instrumentEnabled: instrument.enabled !== false,
+      sizeMultiplier: instrument.sizeMultiplier || 1,
+      hasOpenPosition: !!state.openPositions[symbol],
+      proposedSize: sizing?.size ?? null,
+      proposedRiskAmount: sizing?.riskAmount ?? null,
+      decision,
+    };
+  });
+
+  logger.writeJSON('dashboard_snapshot.json', {
+    generatedAt: nowISO(),
+    capitalAccount,
+    botView: {
+      mode: state.mode,
+      liveTrading: state.LIVE_TRADING,
+      paperTrading: state.PAPER_TRADING,
+      drawdown,
+      watchlist,
+    },
+  });
 }
 
 function writePerformance(state, trades) {
@@ -282,6 +572,16 @@ async function tradingLoop(state, candleHistory) {
     if (candleHistory[sym].length > MAX_CANDLE_HIST) candleHistory[sym].shift();
   }
 
+  // Cleanup winRateBuffer to prevent memory leak
+  if (state.winRateBuffer.length > 500) {
+    state.winRateBuffer = state.winRateBuffer.slice(-250);
+  }
+
+  // Cleanup pfWindowTrades to prevent memory leak
+  if (state.pfWindowTrades.length > 200) {
+    state.pfWindowTrades = state.pfWindowTrades.slice(-100);
+  }
+
   correlation.enforceOpenPositionCorrelation(state, executor);
 
   const indicatorsMap = {};
@@ -315,11 +615,16 @@ async function tradingLoop(state, candleHistory) {
 
   const symbolsReadyForTrading = prices.getSymbols().filter(sym => {
     const ins = state.instruments[sym] || { enabled: true };
+    if (isWeekendUtc() && !isWeekendEligibleSymbol(sym)) return false;
     return ins.enabled !== false && (candleHistory[sym]?.length || 0) >= WARMUP_CANDLES;
   });
   const warmEnough = symbolsReadyForTrading.length > 0;
   if (warmEnough) {
     for (const sym of prices.getSymbols()) {
+      if (isWeekendUtc() && !isWeekendEligibleSymbol(sym)) {
+        logEntryBlocked(sym, 'weekend_mode_symbol_disabled');
+        continue;
+      }
       if (state.openPositions[sym]) {
         logEntryBlocked(sym, 'open_position_exists');
         continue;
@@ -330,14 +635,16 @@ async function tradingLoop(state, candleHistory) {
         continue;
       }
 
-      let marketStatus;
-      try {
-        marketStatus = await prices.getMarketStatus(sym);
-      } catch (err) {
-        logEntryBlocked(sym, 'market_status_check_failed', { error: err.message });
-        continue;
+      let marketStatus = prices.getCachedMarketStatus(sym);
+      if (!marketStatus) {
+        try {
+          marketStatus = await prices.getMarketStatus(sym);
+        } catch (err) {
+          logEntryBlocked(sym, 'market_status_check_failed', { error: err.message });
+          continue;
+        }
       }
-      if (!marketStatus?.isOpen) {
+      if (!marketStatus || !marketStatus.isOpen) {
         logEntryBlocked(sym, 'market_closed', { marketStatus: marketStatus?.status || null });
         continue;
       }
@@ -348,17 +655,47 @@ async function tradingLoop(state, candleHistory) {
         continue;
       }
 
+      const entryReq = adaptiveEntryRequirements(sym, ind, state.params);
+  const higherTf = higherTimeframeTrend(sym, candleHistory);
+
       const sig = signalsMod.score(ind, state.params, sym);
+      const effectiveReq = effectiveEntryRequirements(sym, entryReq, higherTf, sig);
       if (sig.blockedBySentiment) {
-        logEntryBlocked(sym, 'sentiment_contradiction', { sentimentScore: sig.sentimentScore, direction: sig.direction });
+        logEntryBlocked(sym, 'sentiment_contradiction', {
+          sentimentScore: sig.sentimentScore,
+          direction: sig.direction,
+          regime: effectiveReq.regime,
+        });
         continue;
       }
-      if (!sig.direction || sig.score < state.params.minScore || sig.activeSignals < 2) {
+      if (!sig.direction || sig.score < effectiveReq.minScore || sig.activeSignals < effectiveReq.minActiveSignals) {
         logEntryBlocked(sym, 'signal_threshold_not_met', {
           direction: sig.direction || null,
           score: sig.score,
-          minScore: state.params.minScore,
+          minScore: effectiveReq.minScore,
+          minActiveSignals: effectiveReq.minActiveSignals,
           activeSignals: sig.activeSignals,
+          regime: effectiveReq.regime,
+        });
+        continue;
+      }
+      if (higherTf.bias !== 'neutral' && sig.direction && higherTf.bias !== sig.direction) {
+        logEntryBlocked(sym, 'higher_timeframe_mismatch', {
+          direction: sig.direction,
+          higherTimeframeBias: higherTf.bias,
+          reason: higherTf.reason,
+          regime: effectiveReq.regime,
+        });
+        continue;
+      }
+
+      const setupKey = setupFingerprint(sym, sig.direction, sig.reasons);
+      const setupCooldownUntil = Number(state.setupCooldowns?.[setupKey] || 0);
+      if (setupCooldownUntil > Date.now()) {
+        logEntryBlocked(sym, 'setup_cooldown_active', {
+          setupKey,
+          until: setupCooldownUntil,
+          regime: effectiveReq.regime,
         });
         continue;
       }
@@ -376,20 +713,20 @@ async function tradingLoop(state, candleHistory) {
         mode: state.mode,
       });
       if (!pre.allowed) {
-        logEntryBlocked(sym, 'pretrade_guard', { guardReason: pre.reason });
+        logEntryBlocked(sym, 'pretrade_guard', { guardReason: pre.reason, regime: effectiveReq.regime });
         continue;
       }
 
       const corrGate = correlation.canOpen(sym, state.openPositions);
       if (!corrGate.allowed) {
-        logEntryBlocked(sym, 'correlation_gate', { guardReason: corrGate.reason, coefficient: corrGate.coefficient });
+        logEntryBlocked(sym, 'correlation_gate', { guardReason: corrGate.reason, coefficient: corrGate.coefficient, regime: effectiveReq.regime });
         continue;
       }
 
       const fp = memoryMod.fingerprint(ind, sym);
       const mem = memoryMod.checkCondition(fp);
       if (mem.skip) {
-        logEntryBlocked(sym, 'memory_gate', { guardReason: mem.reason });
+        logEntryBlocked(sym, 'memory_gate', { guardReason: mem.reason, regime: effectiveReq.regime });
         continue;
       }
 
@@ -397,7 +734,7 @@ async function tradingLoop(state, candleHistory) {
       const entryPrice = prices.executionPrice(sym, side);
       const sizing = risk.calcPositionSize(sym, sig.direction, entryPrice, ind.atr7, state.params, state.capital, state.openPositions);
       if (!sizing) {
-        logEntryBlocked(sym, 'position_sizing_rejected');
+        logEntryBlocked(sym, 'position_sizing_rejected', { regime: effectiveReq.regime });
         continue;
       }
 
@@ -405,7 +742,7 @@ async function tradingLoop(state, candleHistory) {
       const maxExposure = risk.MAX_TOTAL_EXPOSURE_WITH_TOLERANCE;
       const remainingExposure = Number((maxExposure - currentExposure).toFixed(8));
       if (remainingExposure <= 0) {
-        logEntryBlocked(sym, 'exposure_cap_reached', { currentExposure, maxExposure });
+        logEntryBlocked(sym, 'exposure_cap_reached', { currentExposure, maxExposure, regime: effectiveReq.regime });
         continue;
       }
 
@@ -414,6 +751,7 @@ async function tradingLoop(state, candleHistory) {
         logEntryBlocked(sym, 'correlation_adjusted_risk_cap', {
           risk: Number(corrAdjustedRisk.toFixed(2)),
           cap: Number((state.capital * 0.15).toFixed(2)),
+          regime: effectiveReq.regime,
         });
         continue;
       }
@@ -422,7 +760,7 @@ async function tradingLoop(state, candleHistory) {
       const sizeMultiplier = (ins.sizeMultiplier || 1) * memoryMod.sizeMultiplier(fp) * volMul;
       let size = Number((sizing.size * sizeMultiplier).toFixed(8));
       if (size <= 0) {
-        logEntryBlocked(sym, 'size_after_multipliers_invalid');
+        logEntryBlocked(sym, 'size_after_multipliers_invalid', { regime: effectiveReq.regime });
         continue;
       }
 
@@ -431,13 +769,13 @@ async function tradingLoop(state, candleHistory) {
         size = maxSizeByExposure;
       }
       if (size <= 0) {
-        logEntryBlocked(sym, 'size_after_exposure_clamp_invalid', { currentExposure, maxExposure });
+        logEntryBlocked(sym, 'size_after_exposure_clamp_invalid', { currentExposure, maxExposure, regime: effectiveReq.regime });
         continue;
       }
 
       const proposedExposure = Number((size * entryPrice).toFixed(8));
       if (currentExposure + proposedExposure > maxExposure + 1e-8) {
-        logEntryBlocked(sym, 'exposure_cap_exceeded', { currentExposure, proposedExposure, maxExposure });
+        logEntryBlocked(sym, 'exposure_cap_exceeded', { currentExposure, proposedExposure, maxExposure, regime: effectiveReq.regime });
         continue;
       }
 
@@ -445,6 +783,9 @@ async function tradingLoop(state, candleHistory) {
 
       executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
       state.openPositions[sym].atrMultiplier = state.params.atrMultiplier;
+      state.openPositions[sym].entryRegime = effectiveReq.regime;
+      state.openPositions[sym].setupKey = setupKey;
+      state.openPositions[sym].higherTimeframeBias = higherTf.bias;
     }
   }
 
@@ -477,6 +818,8 @@ async function tradingLoop(state, candleHistory) {
     await createDailyReport(state, allTrades);
     state.lastDailyReportAt = Date.now();
   }
+
+  await writeDashboardSnapshot(state, candleHistory, indicatorsMap);
 }
 
 async function main() {
@@ -507,6 +850,7 @@ async function main() {
   if (broker && typeof broker.auth === 'function') {
     await broker.auth();
   }
+  await hydrateStartupHistory(candleHistory);
 
   executor.init(state, savedTrades);
   memoryMod.init(savedMemory.entries || [], savedMemory.conditionWeights || {});
@@ -536,10 +880,15 @@ async function main() {
   );
 
   let ticks = 0;
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 5;
+
   const interval = setInterval(async () => {
     ticks += 1;
     try {
       await tradingLoop(state, candleHistory);
+      consecutiveErrors = 0; // reset on success
+
       if (ticks % 10 === 0) {
         writePerformance(state, executor.getTradeLog());
         persistState(state, candleHistory);
@@ -556,7 +905,22 @@ async function main() {
         });
       }
     } catch (err) {
-      logger.error('MAIN', 'Loop failure', { error: err.message });
+      consecutiveErrors += 1;
+      logger.error('MAIN', 'Loop failure', {
+        error: err.message,
+        tick: ticks,
+        consecutiveErrors,
+        stack: err.stack?.split('\n').slice(0, 3).join(' | ') || 'no stack',
+      });
+
+      // Exit if too many consecutive errors
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        logger.error('MAIN', `CRASH: ${consecutiveErrors} consecutive errors, exiting`, { error: err.message });
+        clearInterval(interval);
+        writePerformance(state, executor.getTradeLog());
+        persistState(state, candleHistory);
+        process.exit(1);
+      }
     }
   }, TICK_INTERVAL_MS);
 
@@ -568,11 +932,32 @@ async function main() {
     process.exit(0);
   };
 
+  // Catch any unhandled exceptions
+  process.on('uncaughtException', (err) => {
+    logger.error('MAIN', 'UNCAUGHT_EXCEPTION', { error: err.message, stack: err.stack?.split('\n').slice(0, 5).join(' | ') });
+    clearInterval(interval);
+    writePerformance(state, executor.getTradeLog());
+    persistState(state, candleHistory);
+    process.exit(1);
+  });
+
+  // Catch any unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error('MAIN', 'UNHANDLED_REJECTION', {
+      reason: String(reason).slice(0, 500),
+      promise: String(promise).slice(0, 200),
+    });
+    clearInterval(interval);
+    writePerformance(state, executor.getTradeLog());
+    persistState(state, candleHistory);
+    process.exit(1);
+  });
+
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 main().catch(err => {
-  console.error(err);
+  console.error('MAIN: Bootstrap error', err);
   process.exit(1);
 });

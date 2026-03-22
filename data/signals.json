@@ -6,18 +6,18 @@
     "lowerBBWithRsi": 2,
     "macdCross": 1,
     "rsiBounce": 1,
-    "bbSqueezeBreakout": 1
+    "bbSqueezeBreakout": 1,
+    "trendContinuation": 2,
+    "cryptoBreakout": 2
   },
-  "disabledSignals": {
-    "emaCross": 1774193284460,
-    "rsiBounce": 1774194167306
-  },
+  "disabledSignals": {},
   "consecutiveLosses": {
-    "emaCross": 0,
-    "upperBBWithRsi": 1,
-    "bbSqueezeBreakout": 3,
-    "macdCross": 4,
-    "rsiBounce": 0,
-    "vwapReclaim": 1
+    "emaCross": 4,
+    "upperBBWithRsi": 2,
+    "bbSqueezeBreakout": 0,
+    "macdCross": 1,
+    "rsiBounce": 2,
+    "vwapReclaim": 4,
+    "lowerBBWithRsi": 1
   }
 }

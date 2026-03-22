@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-03-22T20:56:02.318Z",
-  "capital": 9999.68,
+  "timestamp": "2026-03-22T21:19:37.385Z",
+  "capital": 9999.4,
   "peakCapital": 10000,
-  "drawdown": 0,
+  "drawdown": 0.01,
   "openPositions": 0,
-  "totalTrades": 6,
+  "totalTrades": 12,
   "mode": "normal",
-  "count": 6,
+  "count": 12,
   "winRate": 0,
   "profitFactor": 0,
   "avgWin": 0,
-  "avgLoss": 0.0529,
-  "maxDrawdown": 0.3173,
+  "avgLoss": 0.0497,
+  "maxDrawdown": 0.5969,
   "bestInstruments": [
-    "BTC",
-    "ETH",
-    "BNB"
-  ],
-  "worstInstruments": [
     "ETH",
     "BNB",
     "SOL"
+  ],
+  "worstInstruments": [
+    "BNB",
+    "SOL",
+    "BTC"
   ]
 }

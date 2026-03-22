@@ -84,6 +84,87 @@
         "macdCross:+1",
         "rsiBounce:+1"
       ]
+    },
+    {
+      "id": "SOL-1774192346234",
+      "symbol": "SOL",
+      "direction": "long",
+      "entryTime": 1774192346234,
+      "fingerprint": "SOL|bear|overbought|above|low|h12",
+      "isWin": false,
+      "pnl": -0.0209,
+      "reasons": [
+        "vwapReclaim:+2",
+        "macdCross:+1"
+      ]
+    },
+    {
+      "id": "ETH-1774193478266",
+      "symbol": "ETH",
+      "direction": "short",
+      "entryTime": 1774193478266,
+      "fingerprint": "ETH|bear|oversold|below|low|h12",
+      "isWin": false,
+      "pnl": -0.0319,
+      "reasons": [
+        "emaCross:-2",
+        "vwapReclaim:-2"
+      ]
+    },
+    {
+      "id": "ETH-1774193628283",
+      "symbol": "ETH",
+      "direction": "short",
+      "entryTime": 1774193628283,
+      "fingerprint": "ETH|bull|oversold|above|low|h12",
+      "isWin": false,
+      "pnl": -0.0411,
+      "reasons": [
+        "emaCross:-2",
+        "lowerBBWithRsi:+2",
+        "bbSqueezeBreakout:-1"
+      ]
+    },
+    {
+      "id": "BNB-1774193664356",
+      "symbol": "BNB",
+      "direction": "long",
+      "entryTime": 1774193664356,
+      "fingerprint": "BNB|bull|oversold|below|low|h12",
+      "isWin": false,
+      "pnl": -0.0432,
+      "reasons": [
+        "emaCross:+2",
+        "bbSqueezeBreakout:+1"
+      ]
+    },
+    {
+      "id": "BTC-1774196766950",
+      "symbol": "BTC",
+      "direction": "short",
+      "entryTime": 1774196766950,
+      "fingerprint": "BTC|bear|oversold|above|low|h16",
+      "isWin": false,
+      "pnl": -0.0756,
+      "reasons": [
+        "vwapReclaim:-2",
+        "rsiBounce:-1"
+      ]
+    },
+    {
+      "id": "BTC-1774197177512",
+      "symbol": "BTC",
+      "direction": "long",
+      "entryTime": 1774197177512,
+      "fingerprint": "BTC|bear|overbought|above|low|h16",
+      "isWin": false,
+      "pnl": -0.0669,
+      "reasons": [
+        "emaCross:+2",
+        "upperBBWithRsi:-2",
+        "macdCross:+1",
+        "rsiBounce:+1"
+      ]
     }
   ],
   "conditionWeights": {}

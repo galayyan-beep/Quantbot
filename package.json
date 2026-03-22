@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node index.js",
     "start:dev": "NODE_ENV=development node index.js",
-    "backtest": "node backtest.js"
+    "backtest": "node backtest.js",
+    "dashboard": "node dashboardServer.js",
+    "dashboard:bot": "node index.js",
+    "dashboard:all": "node dashboardServer.js"
   },
   "engines": {
     "node": ">=18.0.0"

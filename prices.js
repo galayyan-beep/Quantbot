@@ -73,6 +73,14 @@ function getBroker() {
   return broker;
 }
 
+function getCachedMarketStatus(symbol) {
+  if (!broker) return null;
+  if (typeof broker.getCachedMarketStatus === 'function') {
+    return broker.getCachedMarketStatus(symbol);
+  }
+  return null;
+}
+
 async function getMarketStatus(symbol, opts = {}) {
   if (!broker) init({}, {});
   return broker.getMarketStatus(symbol, opts);
@@ -92,6 +100,7 @@ module.exports = {
   getSymbols,
   getInstrumentInfo,
   getBroker,
+  getCachedMarketStatus,
   getMarketStatus,
   isMarketOpen,
   INSTRUMENTS,

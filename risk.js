@@ -13,6 +13,7 @@ const { INSTRUMENTS } = require('./prices');
 const MAX_TOTAL_EXPOSURE = 100;
 const EXPOSURE_TOLERANCE_PCT = 0.02;
 const MAX_TOTAL_EXPOSURE_WITH_TOLERANCE = MAX_TOTAL_EXPOSURE * (1 + EXPOSURE_TOLERANCE_PCT);
+const MAX_CRYPTO_BASKET_EXPOSURE = 70;
 
 // ─── Correlation groups (never hold two from same group simultaneously) ───────
 const CORRELATION_GROUPS = [
@@ -39,6 +40,16 @@ function positionExposure(position) {
 function totalOpenExposure(openPositions = {}) {
   let total = 0;
   for (const pos of Object.values(openPositions)) total += positionExposure(pos);
+  return round8(total);
+}
+
+function cryptoBasketExposure(openPositions = {}) {
+  let total = 0;
+  for (const pos of Object.values(openPositions)) {
+    const sym = String(pos?.symbol || '');
+    const info = INSTRUMENTS[sym];
+    if (info?.category === 'crypto') total += positionExposure(pos);
+  }
   return round8(total);
 }
 
@@ -78,17 +89,38 @@ function calcPositionSize(symbol, direction, entryPrice, atrValue, params, capit
   if (!atrValue || atrValue <= 0 || !entryPrice || entryPrice <= 0) return null;
 
   const riskPct       = Math.min(params.riskPercent || 3, 3);
-  const atrMulSL      = params.atrMultiplier     || 1.5;
-  const atrMulTP      = atrMulSL * 2;            // 2 × SL for 2:1 R:R
+  const info = INSTRUMENTS[symbol] || {};
+  const baseAtrMulSL  = params.atrMultiplier || 1.5;
+  const atrPct = atrValue / entryPrice;
+  const targetAtrPctByCategory = {
+    crypto: 0.012,
+    forex: 0.002,
+    commodity: 0.004,
+    index: 0.003,
+  };
+  const targetAtrPct = targetAtrPctByCategory[info.category] || 0.004;
+  const volTargetMultiplier = Math.max(0.6, Math.min(1.4, targetAtrPct / Math.max(atrPct, 0.0001)));
+  const cryptoMinStopPct = 0.0045;
+  const cryptoAtrMulFloor = 2.2;
 
-  const riskAmount    = capital * riskPct / 100;
-  const stopDistance  = atrMulSL * atrValue;
+  let atrMulSL = baseAtrMulSL;
+  if (info.category === 'crypto') {
+    atrMulSL = Math.max(baseAtrMulSL, cryptoAtrMulFloor);
+  }
+  const atrMulTP = info.category === 'crypto'
+    ? Math.max(atrMulSL * 1.8, 2.8)
+    : atrMulSL * 2;
+
+  const riskAmount    = (capital * riskPct / 100) * volTargetMultiplier;
+  let stopDistance  = atrMulSL * atrValue;
+  if (info.category === 'crypto') {
+    stopDistance = Math.max(stopDistance, entryPrice * cryptoMinStopPct);
+  }
   const tpDistance    = atrMulTP * atrValue;
 
   let size = riskAmount / stopDistance;
 
   // ── Crypto hard cap: max 40% of capital in any single crypto position ──────
-  const info = INSTRUMENTS[symbol];
   if (info && info.category === 'crypto') {
     const maxNotional = capital * 0.40;
     const candidateNotional = size * entryPrice;
@@ -122,6 +154,23 @@ function calcPositionSize(symbol, direction, entryPrice, atrValue, params, capit
   const candidateExposure = size * entryPrice;
   if (candidateExposure > remainingExposure) {
     size = remainingExposure / entryPrice;
+  }
+
+  if (info && info.category === 'crypto') {
+    const existingCryptoExposure = cryptoBasketExposure(openPositions);
+    const remainingCryptoBasket = MAX_CRYPTO_BASKET_EXPOSURE - existingCryptoExposure;
+    if (remainingCryptoBasket <= 0) {
+      logger.info('RISK', 'Trade rejected by crypto basket cap', {
+        symbol,
+        currentCryptoExposure: round8(existingCryptoExposure),
+        maxCryptoExposure: round8(MAX_CRYPTO_BASKET_EXPOSURE),
+      });
+      return null;
+    }
+    const cappedByBasket = remainingCryptoBasket / entryPrice;
+    if (size > cappedByBasket) {
+      size = cappedByBasket;
+    }
   }
 
   size = round8(size);
@@ -257,4 +306,6 @@ module.exports = {
   CORRELATION_GROUPS,
   positionExposure,
   totalOpenExposure,
+  cryptoBasketExposure,
+  MAX_CRYPTO_BASKET_EXPOSURE,
 };

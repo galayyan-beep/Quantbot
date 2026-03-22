@@ -32,6 +32,8 @@ const DEFAULT_WEIGHTS = {
   macdCross:         1,
   rsiBounce:         1,
   bbSqueezeBreakout: 1,
+  trendContinuation: 2,
+  cryptoBreakout:    2,
 };
 
 // Runtime state loaded/saved to signals.json
@@ -200,6 +202,35 @@ function score(ind, params, symbol = null) {
         shortScore += w;
         reasons.push('bbSqueezeBreakout:-' + w);
       }
+    }
+  }
+
+  // ── Signal 8: Trend continuation after pullback into aligned EMAs ─────────
+  if (isSignalEnabled('trendContinuation') && ema8 && ema21 && ema50 && rsi7 !== null && momentum3 !== null && close) {
+    const w = weights.trendContinuation;
+    const emaStackBull = close > ema8 && ema8 > ema21 && ema21 > ema50;
+    const emaStackBear = close < ema8 && ema8 < ema21 && ema21 < ema50;
+    if (emaStackBull && rsi7 >= 52 && rsi7 <= 68 && momentum3 > momThr * 0.5) {
+      longScore += w;
+      reasons.push('trendContinuation:+' + w);
+    } else if (emaStackBear && rsi7 <= 48 && rsi7 >= 32 && momentum3 < -momThr * 0.5) {
+      shortScore += w;
+      reasons.push('trendContinuation:-' + w);
+    }
+  }
+
+  // ── Signal 9: Crypto breakout when bands expand with directional momentum ─
+  if (symbol && ['BTC', 'ETH', 'SOL', 'BNB'].includes(symbol) && isSignalEnabled('cryptoBreakout') && bb && prevBB && ema8 && ema21 && momentum3 !== null && close) {
+    const w = weights.cryptoBreakout;
+    const bandExpansion = bb.bandwidth > prevBB.bandwidth * 1.08;
+    const bullishBreakout = bandExpansion && close > bb.upper * 0.998 && ema8 > ema21 && momentum3 > momThr * 0.8;
+    const bearishBreakout = bandExpansion && close < bb.lower * 1.002 && ema8 < ema21 && momentum3 < -momThr * 0.8;
+    if (bullishBreakout) {
+      longScore += w;
+      reasons.push('cryptoBreakout:+' + w);
+    } else if (bearishBreakout) {
+      shortScore += w;
+      reasons.push('cryptoBreakout:-' + w);
     }
   }
 

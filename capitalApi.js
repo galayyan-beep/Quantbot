@@ -93,6 +93,8 @@ const EPICS = {
   DAX: 'DE40',
 };
 
+const EPIC_TO_SYMBOL = Object.fromEntries(Object.entries(EPICS).map(([symbol, epic]) => [epic, symbol]));
+
 class CapitalClient {
   constructor({ paperTrading }) {
     this.paperTrading = !!paperTrading;
@@ -109,7 +111,11 @@ class CapitalClient {
     this.authenticatedAt = 0;
     this.activeAccountId = null;
     this.lastBySymbol = {};
+    this.lastMarketStatus = {};
     this.marketStatusCache = {};
+    this.accountSnapshotCache = null;
+    this.positionsSnapshotCache = null;
+    this.lastAuthBody = null;
     this.marketStatusTtlMs = 30000;
     this.endpointChecked = false;
     this.safetyConfirmedLogged = false;
@@ -164,6 +170,10 @@ class CapitalClient {
     };
   }
 
+  getCachedMarketStatus(symbol) {
+    return this.lastMarketStatus[symbol] || null;
+  }
+
   pickTargetAccount(accounts = []) {
     if (!Array.isArray(accounts) || accounts.length === 0) return null;
     const target = Number.isFinite(this.targetAvailableBalance) ? this.targetAvailableBalance : 100;
@@ -190,6 +200,26 @@ class CapitalClient {
       if (byId) return byId;
     }
     return this.pickTargetAccount(accounts);
+  }
+
+  sanitizeAccount(account) {
+    if (!account) return null;
+    const balance = account.balance || {};
+    return {
+      accountId: String(account.accountId || '').trim() || null,
+      accountName: account.accountName || account.name || null,
+      accountType: account.accountType || account.type || null,
+      preferred: !!account.preferred,
+      balance: Number(balance.balance ?? account.balanceAmount ?? NaN),
+      available: Number(balance.available ?? account.available ?? NaN),
+      deposit: Number(balance.deposit ?? account.deposit ?? NaN),
+      profitLoss: Number(balance.profitLoss ?? account.profitLoss ?? NaN),
+      currency: balance.currency || account.currency || 'USD',
+    };
+  }
+
+  knownAccounts() {
+    return Array.isArray(this.lastAuthBody?.accounts) ? this.lastAuthBody.accounts : [];
   }
 
   useMode({ paperTrading }) {
@@ -314,6 +344,100 @@ class CapitalClient {
     };
   }
 
+  async getAccountSnapshot(opts = {}) {
+    const forceRefresh = !!opts.forceRefresh;
+    if (!forceRefresh && this.accountSnapshotCache && Date.now() - this.accountSnapshotCache.fetchedAt < 10000) {
+      return this.accountSnapshotCache.value;
+    }
+
+    const ready = await this.auth();
+    if (!ready) {
+      return {
+        connected: false,
+        paperTrading: this.paperTrading,
+        activeAccountId: null,
+        targetAccountId: this.targetAccountId || null,
+        activeAccount: null,
+        targetAccount: null,
+        accounts: [],
+      };
+    }
+
+    const session = await this.getSessionDetails();
+    const accounts = this.knownAccounts();
+    const activeAccountId = String(session?.accountId || this.activeAccountId || '').trim() || null;
+    const activeAccount = accounts.find(account => String(account?.accountId || '').trim() === activeAccountId) || null;
+    const targetAccount = this.targetAccountFrom({ accounts });
+
+    const value = {
+      connected: true,
+      paperTrading: this.paperTrading,
+      activeAccountId,
+      targetAccountId: this.targetAccountId || String(targetAccount?.accountId || '').trim() || null,
+      activeAccount: this.sanitizeAccount(activeAccount),
+      targetAccount: this.sanitizeAccount(targetAccount),
+      accounts: accounts.map(account => this.sanitizeAccount(account)),
+      fetchedAt: Date.now(),
+    };
+
+    this.accountSnapshotCache = { fetchedAt: Date.now(), value };
+    return value;
+  }
+
+  async getOpenPositions(opts = {}) {
+    const forceRefresh = !!opts.forceRefresh;
+    if (!forceRefresh && this.positionsSnapshotCache && Date.now() - this.positionsSnapshotCache.fetchedAt < 10000) {
+      return this.positionsSnapshotCache.value;
+    }
+
+    const ready = await this.auth();
+    if (!ready) {
+      return {
+        connected: false,
+        positions: [],
+        fetchedAt: Date.now(),
+      };
+    }
+
+    await this.ensureTargetAccountActive();
+    const { body } = await this.request('/positions', { method: 'GET' });
+    const rows = Array.isArray(body?.positions)
+      ? body.positions
+      : Array.isArray(body)
+        ? body
+        : [];
+
+    const positions = rows.map(row => {
+      const position = row?.position || row || {};
+      const market = row?.market || {};
+      const epic = position.epic || market.epic || null;
+      return {
+        dealId: position.dealId || row?.dealId || null,
+        dealReference: position.dealReference || row?.dealReference || null,
+        symbol: EPIC_TO_SYMBOL[epic] || epic || null,
+        epic,
+        direction: String(position.direction || row?.direction || '').toUpperCase() || null,
+        size: Number(position.size ?? row?.size ?? NaN),
+        level: Number(position.level ?? position.openLevel ?? row?.level ?? NaN),
+        stopLevel: Number(position.stopLevel ?? row?.stopLevel ?? NaN),
+        limitLevel: Number(position.limitLevel ?? row?.limitLevel ?? NaN),
+        createdDate: position.createdDateUTC || position.createdDate || row?.createdDateUTC || row?.createdDate || null,
+        marketStatus: market.marketStatus || null,
+        bid: Number(market.bid ?? NaN),
+        offer: Number(market.offer ?? NaN),
+        profitLoss: Number(position.profit ?? position.pnl ?? row?.profit ?? row?.pnl ?? NaN),
+      };
+    });
+
+    const value = {
+      connected: true,
+      positions,
+      fetchedAt: Date.now(),
+    };
+    this.positionsSnapshotCache = { fetchedAt: Date.now(), value };
+    return value;
+  }
+
   async switchActiveAccount(accountId) {
     const target = String(accountId || '').trim();
     if (!target) throw new Error('Missing accountId for account switch');
@@ -403,6 +527,7 @@ class CapitalClient {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    this.lastAuthBody = body;
     this.cst = res.headers.get('cst') || res.headers.get('CST') || null;
     this.securityToken = res.headers.get('x-security-token') || res.headers.get('X-SECURITY-TOKEN') || null;
 
@@ -479,20 +604,48 @@ class CapitalClient {
       throw new Error(`No candle returned for ${symbol}`);
     }
 
-    const open = Number(latest.openPrice?.bid ?? latest.open ?? latest.openPrice ?? latest.closePrice?.bid ?? 0);
-    const high = Number(latest.highPrice?.bid ?? latest.high ?? open);
-    const low = Number(latest.lowPrice?.bid ?? latest.low ?? open);
-    const close = Number(latest.closePrice?.bid ?? latest.close ?? open);
-    const volume = Number(latest.lastTradedVolume ?? latest.volume ?? 1);
-    const timestamp = latest.snapshotTimeUTC
-      ? Date.parse(latest.snapshotTimeUTC)
-      : latest.snapshotTime
-        ? Date.parse(latest.snapshotTime)
-        : Date.now();
-
-    const candle = { symbol, open, high, low, close, volume, timestamp: Number.isFinite(timestamp) ? timestamp : Date.now() };
+    const candle = this.normalizeCandle(symbol, latest);
     this.lastBySymbol[symbol] = candle;
     return candle;
+  }
+
+  normalizeCandle(symbol, priceRow) {
+    const open = Number(priceRow?.openPrice?.bid ?? priceRow?.open ?? priceRow?.openPrice ?? priceRow?.closePrice?.bid ?? 0);
+    const high = Number(priceRow?.highPrice?.bid ?? priceRow?.high ?? open);
+    const low = Number(priceRow?.lowPrice?.bid ?? priceRow?.low ?? open);
+    const close = Number(priceRow?.closePrice?.bid ?? priceRow?.close ?? open);
+    const volume = Number(priceRow?.lastTradedVolume ?? priceRow?.volume ?? 1);
+    const timestamp = priceRow?.snapshotTimeUTC
+      ? Date.parse(priceRow.snapshotTimeUTC)
+      : priceRow?.snapshotTime
+        ? Date.parse(priceRow.snapshotTime)
+        : Date.now();
+
+    return {
+      symbol,
+      open,
+      high,
+      low,
+      close,
+      volume,
+      timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+    };
+  }
+
+  async fetchHistoricalCandles(symbol, opts = {}) {
+    const epic = EPICS[symbol];
+    if (!epic) throw new Error(`No epic mapping for symbol ${symbol}`);
+    const resolution = opts.resolution || 'MINUTE';
+    const max = Math.max(2, Math.min(Number(opts.max || 180), 500));
+    const ready = await this.auth();
+    if (!ready) throw new Error('Capital auth unavailable');
+
+    const { body } = await this.request(`/prices/${encodeURIComponent(epic)}?resolution=${encodeURIComponent(resolution)}&max=${max}`, { method: 'GET' });
+    const rows = body?.prices || body?.candles || [];
+    return rows
+      .map(row => this.normalizeCandle(symbol, row))
+      .filter(candle => Number.isFinite(candle.close) && candle.close > 0)
+      .sort((left, right) => left.timestamp - right.timestamp);
   }
 
   async fetchBatch(symbols) {
@@ -500,6 +653,7 @@ class CapitalClient {
     for (const symbol of symbols) {
       try {
         const status = await this.getMarketStatus(symbol);
+        this.lastMarketStatus[symbol] = status;
         if (!status.isOpen) {
           logger.info('CAPITAL', 'Skipping candle fetch for closed market', {
             symbol,

@@ -1,5 +1,177 @@
 {
-  "warning": "Insufficient historical data from Capital.com",
-  "sharpeRatio": 0,
-  "maxDrawdown": 1
+  "generatedAt": "2026-03-22T15:35:12.773Z",
+  "metrics": {
+    "startedCapital": 10000,
+    "finalCapital": 10026.71,
+    "totalReturn": 0.0026709999999999126,
+    "annualizedReturn": 0.0011393799630783352,
+    "maxDrawdown": 0.010693344936044005,
+    "maxDrawdownAt": "2025-05-26T21:00:00.000Z",
+    "sharpeRatio": -7.2734285481270735,
+    "winRate": 0.3829787234042553,
+    "profitFactor": 1.0622983215505486,
+    "averageWin": 6.3264218127450045,
+    "averageLoss": -3.696461242352705,
+    "bestTrade": {
+      "symbol": "SOL",
+      "direction": "short",
+      "entry": 128.2536,
+      "entryTime": 1763672400000,
+      "size": 0.54579365,
+      "stopLoss": 153.80933,
+      "takeProfit": 82.253278,
+      "reasons": [
+        "momentumSurge:-2",
+        "trendContinuation:-2"
+      ],
+      "hold": 76,
+      "exitTime": 1770238800000,
+      "pnl": 25.106683645555307,
+      "holdDays": 76
+    },
+    "worstTrade": {
+      "symbol": "SOL",
+      "direction": "short",
+      "entry": 138.9674,
+      "entryTime": 1741294800000,
+      "size": 0.50371526,
+      "stopLoss": 183.9514,
+      "takeProfit": 57.996205,
+      "reasons": [
+        "momentumSurge:-2",
+        "trendContinuation:-2"
+      ],
+      "hold": 67,
+      "exitTime": 1747083600000,
+      "pnl": -22.659127255840005,
+      "holdDays": 67
+    },
+    "totalTrades": 188,
+    "averageHoldDays": 15.664893617021276
+  },
+  "breakdown": {
+    "byInstrument": {
+      "ETH": {
+        "pnl": 5.550813560919627,
+        "wins": 6,
+        "total": 15
+      },
+      "BNB": {
+        "pnl": -3.5246313214697653,
+        "wins": 6,
+        "total": 15
+      },
+      "USDJPY": {
+        "pnl": -2.1984032335634325,
+        "wins": 4,
+        "total": 13
+      },
+      "GBPUSD": {
+        "pnl": 6.310438083236201,
+        "wins": 8,
+        "total": 16
+      },
+      "OIL": {
+        "pnl": 9.32605040251551,
+        "wins": 5,
+        "total": 10
+      },
+      "DAX": {
+        "pnl": -1.7314897417238084,
+        "wins": 4,
+        "total": 12
+      },
+      "GOLD": {
+        "pnl": 11.296031422191485,
+        "wins": 5,
+        "total": 11
+      },
+      "SILVER": {
+        "pnl": 40.26830938530449,
+        "wins": 8,
+        "total": 16
+      },
+      "SPX": {
+        "pnl": -1.4632206213077104,
+        "wins": 6,
+        "total": 17
+      },
+      "AUDUSD": {
+        "pnl": -5.526072744442861,
+        "wins": 3,
+        "total": 13
+      },
+      "NQ": {
+        "pnl": -7.099416383836857,
+        "wins": 5,
+        "total": 13
+      },
+      "BTC": {
+        "pnl": -13.869620692713646,
+        "wins": 3,
+        "total": 9
+      },
+      "EURUSD": {
+        "pnl": -0.6508473152122412,
+        "wins": 5,
+        "total": 17
+      },
+      "SOL": {
+        "pnl": -9.975074395170104,
+        "wins": 4,
+        "total": 11
+      }
+    },
+    "bySignal": {
+      "emaCross": {
+        "pnl": 9.93346847877265,
+        "wins": 35,
+        "total": 98
+      },
+      "vwapReclaim": {
+        "pnl": 35.132169208352046,
+        "wins": 9,
+        "total": 18
+      },
+      "momentumSurge": {
+        "pnl": -18.352771282397754,
+        "wins": 28,
+        "total": 72
+      }
+    },
+    "byAssetClass": {
+      "crypto": {
+        "pnl": -21.818512848433866,
+        "wins": 19,
+        "total": 50
+      },
+      "forex": {
+        "pnl": -2.0648852099823376,
+        "wins": 20,
+        "total": 59
+      },
+      "commodity": {
+        "pnl": 60.89039121001149,
+        "wins": 18,
+        "total": 37
+      },
+      "index": {
+        "pnl": -10.294126746868372,
+        "wins": 15,
+        "total": 42
+      }
+    },
+    "bestMonth": {
+      "month": "2026-01",
+      "pnl": 22.21364163887699,
+      "wins": 5,
+      "total": 13
+    },
+    "worstMonth": {
+      "month": "2025-05",
+      "pnl": -50.758340852650086,
+      "wins": 0,
+      "total": 8
+    }
+  }
 }

@@ -15,6 +15,31 @@ function shouldLiveExecute() {
   return process.env.LIVE_TRADING === 'true' && !_state.PAPER_TRADING;
 }
 
+function registerSetupOutcome(position, closedTrade) {
+  const setupKey = position?.setupKey;
+  if (!setupKey || !_state) return;
+
+  if (!_state.setupStopoutCounts) _state.setupStopoutCounts = {};
+  if (!_state.setupCooldowns) _state.setupCooldowns = {};
+
+  const isFastStopout = closedTrade.exitReason === 'stop_loss' && Number(closedTrade.holdCandles || 0) <= 1;
+  if (isFastStopout) {
+    const nextCount = Number(_state.setupStopoutCounts[setupKey] || 0) + 1;
+    _state.setupStopoutCounts[setupKey] = nextCount;
+    if (nextCount >= 2) {
+      _state.setupCooldowns[setupKey] = Date.now() + 90 * 60 * 1000;
+      _state.setupStopoutCounts[setupKey] = 0;
+      logger.warn('EXECUTOR', 'Setup cooled down after repeated one-candle stop-outs', { setupKey, cooldownMinutes: 90 });
+    }
+    return;
+  }
+
+  if (closedTrade.isWin) {
+    _state.setupStopoutCounts[setupKey] = 0;
+    delete _state.setupCooldowns[setupKey];
+  }
+}
+
 // ─── Runtime state (injected from index.js via init) ─────────────────────────
 let _state       = null;   // shared mutable state object
 let _tradeLog    = [];     // in-memory copy of all trades
@@ -172,6 +197,8 @@ function exit(symbol, exitReason, overridePrice) {
     if (isWin) signals.recordSignalWin(key);
     else        signals.recordSignalLoss(key);
   }
+
+  registerSetupOutcome(position, closedTrade);
 
   logger.trade('EXECUTOR', `EXIT ${exitReason.toUpperCase()} ${symbol}`, {
     entry:    position.entryPrice,
