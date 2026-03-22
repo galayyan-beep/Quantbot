@@ -1,0 +1,108 @@
+name: Quantbot — Run & Commit
+
+on:
+  # Restart every 6 hours as keepalive
+  schedule:
+    - cron: '0 */6 * * *'
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+  # Also run on push to main (useful after first deploy)
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write       # needed to commit data files back
+  issues: write         # needed to post daily summary comments
+
+jobs:
+  run-bot:
+    name: Run Quantbot (6-hour session)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360    # maximum GitHub Actions job duration
+
+    steps:
+      # ── 1. Checkout including all committed data files ─────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      # ── 2. Set up Node.js ──────────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── 3. Install dependencies ────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 4. Run Quantbot for ~5h 48m (leave 12min for commit step) ─────────
+      - name: Run Quantbot
+        run: timeout 20880 node index.js || true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL:   ${{ secrets.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022' }}
+          CAPITAL_API_KEY:   ${{ secrets.CAPITAL_API_KEY }}
+          CAPITAL_API_SECRET: ${{ secrets.CAPITAL_API_SECRET }}
+          CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
+          NEWS_API_KEY:      ${{ secrets.NEWS_API_KEY }}
+          NODE_ENV:          production
+
+      # ── 5. Commit all JSON state files back to repo ────────────────────────
+      - name: Commit trading state
+        run: |
+          git config user.name  "Quantbot[bot]"
+          git config user.email "quantbot@users.noreply.github.com"
+          git add data/ || true
+          if git diff --staged --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "chore(data): trading state update [$(date -u '+%Y-%m-%d %H:%M UTC')]"
+            git push
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 6. Post daily summary (runs only between 00:00 and 06:00 UTC) ──────
+      - name: Post daily summary
+        if: ${{ github.event_name == 'schedule' && (github.event.schedule == '0 0 * * *' || startsWith(github.event.schedule, '0 */6')) }}
+        run: node scripts/post-summary.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Daily digest job — runs at midnight UTC, posts issue comment with P&L summary
+# ─────────────────────────────────────────────────────────────────────────────
+  daily-digest:
+    name: Post Daily P&L Digest
+    runs-on: ubuntu-latest
+    needs: []               # independent of run-bot
+    if: github.event_name == 'schedule'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Generate and post daily digest
+        run: node scripts/post-summary.js
+        env:
+          GITHUB_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CAPITAL_API_KEY:   ${{ secrets.CAPITAL_API_KEY }}
+          CAPITAL_API_SECRET: ${{ secrets.CAPITAL_API_SECRET }}
+          CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
+          NEWS_API_KEY:      ${{ secrets.NEWS_API_KEY }}

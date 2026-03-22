@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-03-22T14:19:43.478Z",
+  "pnl": 0,
+  "winRate": 0,
+  "profitFactor": 0,
+  "aiChanges": [],
+  "sentimentSummary": {
+    "updatedAt": 1774189180068,
+    "overall": {
+      "meanScore": 0
+    },
+    "bySymbol": {},
+    "headlines": []
+  },
+  "verdict": "BAD DAY"
+}

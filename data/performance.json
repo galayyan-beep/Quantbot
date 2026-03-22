@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-03-22T15:07:16.394Z",
+  "capital": 9999.68,
+  "peakCapital": 10000,
+  "drawdown": 0,
+  "openPositions": 0,
+  "totalTrades": 6,
+  "mode": "normal",
+  "count": 6,
+  "winRate": 0,
+  "profitFactor": 0,
+  "avgWin": 0,
+  "avgLoss": 0.0529,
+  "maxDrawdown": 0.3173,
+  "bestInstruments": [
+    "BTC",
+    "ETH",
+    "BNB"
+  ],
+  "worstInstruments": [
+    "ETH",
+    "BNB",
+    "SOL"
+  ]
+}

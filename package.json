@@ -1,0 +1,19 @@
+{
+  "name": "quantbot",
+  "version": "1.0.0",
+  "description": "Production-grade paper trading bot with AI self-improvement engine",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "start:dev": "NODE_ENV=development node index.js",
+    "backtest": "node backtest.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "node-fetch": "^3.3.2"
+  },
+  "license": "MIT"
+}

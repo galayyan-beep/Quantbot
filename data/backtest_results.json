@@ -1,0 +1,172 @@
+{
+  "generatedAt": "2026-03-22T15:02:54.952Z",
+  "metrics": {
+    "startedCapital": 10000,
+    "finalCapital": 10012.72,
+    "totalReturn": 0.0012719999999999344,
+    "annualizedReturn": 0.0005428197506351928,
+    "maxDrawdown": 0.005061993018146131,
+    "maxDrawdownAt": "2026-01-17T21:00:00.000Z",
+    "sharpeRatio": -6.673973542063359,
+    "winRate": 0.373134328358209,
+    "profitFactor": 1.0279388258533837,
+    "averageWin": 6.2397923008077845,
+    "averageLoss": -3.613213150822181,
+    "bestTrade": {
+      "symbol": "ETH",
+      "direction": "short",
+      "entry": 2017.93,
+      "entryTime": 1741467600000,
+      "size": 0.050546848,
+      "stopLoss": 2316.3957,
+      "takeProfit": 1420.9986,
+      "reasons": [
+        "momentumSurge:-2",
+        "macdCross:-1"
+      ],
+      "hold": 29,
+      "exitTime": 1743973200000,
+      "pnl": 30.173000742227206,
+      "holdDays": 29
+    },
+    "worstTrade": {
+      "symbol": "SOL",
+      "direction": "long",
+      "entry": 162.0429,
+      "entryTime": 1723064400000,
+      "size": 0.62946294,
+      "stopLoss": 133.77767,
+      "takeProfit": 218.57336,
+      "reasons": [
+        "vwapReclaim:+2",
+        "momentumSurge:+2"
+      ],
+      "hold": 22,
+      "exitTime": 1724965200000,
+      "pnl": -17.791914775576203,
+      "holdDays": 22
+    },
+    "totalTrades": 201,
+    "averageHoldDays": 12.497512437810945
+  },
+  "breakdown": {
+    "byInstrument": {
+      "BNB": {
+        "pnl": -16.94259291368459,
+        "wins": 4,
+        "total": 14
+      },
+      "GOLD": {
+        "pnl": 18.718802093282026,
+        "wins": 9,
+        "total": 15
+      },
+      "SPX": {
+        "pnl": 4.702927886360276,
+        "wins": 5,
+        "total": 13
+      },
+      "OIL": {
+        "pnl": 1.4049595200676963,
+        "wins": 4,
+        "total": 12
+      },
+      "EURUSD": {
+        "pnl": 0.5742493865310396,
+        "wins": 7,
+        "total": 25
+      },
+      "BTC": {
+        "pnl": -19.111515866683014,
+        "wins": 4,
+        "total": 15
+      },
+      "AUDUSD": {
+        "pnl": -6.437517740517798,
+        "wins": 3,
+        "total": 14
+      },
+      "DAX": {
+        "pnl": 1.3431731495421015,
+        "wins": 4,
+        "total": 9
+      },
+      "ETH": {
+        "pnl": -0.6687147772917807,
+        "wins": 5,
+        "total": 14
+      },
+      "GBPUSD": {
+        "pnl": 1.1863507830621989,
+        "wins": 6,
+        "total": 15
+      },
+      "SILVER": {
+        "pnl": 41.6750435181203,
+        "wins": 8,
+        "total": 16
+      },
+      "USDJPY": {
+        "pnl": 0.30112916320305594,
+        "wins": 7,
+        "total": 16
+      },
+      "SOL": {
+        "pnl": -22.344774638588525,
+        "wins": 3,
+        "total": 11
+      },
+      "NQ": {
+        "pnl": 8.318045993586324,
+        "wins": 6,
+        "total": 12
+      }
+    },
+    "bySignal": {
+      "vwapReclaim": {
+        "pnl": 38.710990322543694,
+        "wins": 13,
+        "total": 31
+      },
+      "momentumSurge": {
+        "pnl": -25.991424765554395,
+        "wins": 62,
+        "total": 170
+      }
+    },
+    "byAssetClass": {
+      "crypto": {
+        "pnl": -59.06759819624791,
+        "wins": 16,
+        "total": 54
+      },
+      "commodity": {
+        "pnl": 61.79880513147002,
+        "wins": 21,
+        "total": 43
+      },
+      "index": {
+        "pnl": 14.364147029488702,
+        "wins": 15,
+        "total": 34
+      },
+      "forex": {
+        "pnl": -4.375788407721504,
+        "wins": 23,
+        "total": 70
+      }
+    },
+    "bestMonth": {
+      "month": "2025-04",
+      "pnl": 31.84752819851203,
+      "wins": 3,
+      "total": 8
+    },
+    "worstMonth": {
+      "month": "2025-02",
+      "pnl": -42.62548814377746,
+      "wins": 2,
+      "total": 12
+    }
+  }
+}

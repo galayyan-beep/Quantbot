@@ -1,0 +1,58 @@
+{
+  "BTC": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "ETH": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "SOL": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "BNB": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "EURUSD": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "GBPUSD": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "USDJPY": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "AUDUSD": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "GOLD": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "SILVER": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "OIL": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "SPX": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "NQ": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  },
+  "DAX": {
+    "enabled": true,
+    "sizeMultiplier": 1
+  }
+}

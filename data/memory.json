@@ -1,0 +1,90 @@
+{
+  "entries": [
+    {
+      "id": "SOL-1774189467640",
+      "symbol": "SOL",
+      "direction": "long",
+      "entryTime": 1774189467640,
+      "fingerprint": "SOL|bull|overbought|above|low|h12",
+      "isWin": false,
+      "pnl": -0.0742,
+      "reasons": [
+        "emaCross:+2",
+        "upperBBWithRsi:-2",
+        "bbSqueezeBreakout:+1"
+      ]
+    },
+    {
+      "id": "BNB-1774189491647",
+      "symbol": "BNB",
+      "direction": "long",
+      "entryTime": 1774189491647,
+      "fingerprint": "BNB|bull|overbought|above|low|h12",
+      "isWin": false,
+      "pnl": -0.0643,
+      "reasons": [
+        "emaCross:+2",
+        "macdCross:+1",
+        "rsiBounce:+1"
+      ]
+    },
+    {
+      "id": "BNB-1774189598840",
+      "symbol": "BNB",
+      "direction": "short",
+      "entryTime": 1774189598840,
+      "fingerprint": "BNB|bear|oversold|below|low|h12",
+      "isWin": false,
+      "pnl": -0.0238,
+      "reasons": [
+        "emaCross:-2",
+        "rsiBounce:-1",
+        "bbSqueezeBreakout:-1"
+      ]
+    },
+    {
+      "id": "ETH-1774189657187",
+      "symbol": "ETH",
+      "direction": "short",
+      "entryTime": 1774189657187,
+      "fingerprint": "ETH|bear|oversold|below|low|h12",
+      "isWin": false,
+      "pnl": -0.0563,
+      "reasons": [
+        "emaCross:-2",
+        "macdCross:-1",
+        "rsiBounce:-1",
+        "bbSqueezeBreakout:-1"
+      ]
+    },
+    {
+      "id": "SOL-1774189682956",
+      "symbol": "SOL",
+      "direction": "short",
+      "entryTime": 1774189682956,
+      "fingerprint": "SOL|bear|overbought|below|low|h12",
+      "isWin": false,
+      "pnl": -0.045,
+      "reasons": [
+        "emaCross:-2",
+        "macdCross:-1",
+        "rsiBounce:-1"
+      ]
+    },
+    {
+      "id": "BTC-1774190565296",
+      "symbol": "BTC",
+      "direction": "long",
+      "entryTime": 1774190565296,
+      "fingerprint": "BTC|bear|neutral|above|low|h12",
+      "isWin": false,
+      "pnl": -0.0537,
+      "reasons": [
+        "vwapReclaim:+2",
+        "macdCross:+1",
+        "rsiBounce:+1"
+      ]
+    }
+  ],
+  "conditionWeights": {}
+}

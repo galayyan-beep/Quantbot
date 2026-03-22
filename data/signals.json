@@ -1,0 +1,23 @@
+{
+  "weights": {
+    "emaCross": 2,
+    "vwapReclaim": 2,
+    "momentumSurge": 2,
+    "lowerBBWithRsi": 2,
+    "macdCross": 1,
+    "rsiBounce": 1,
+    "bbSqueezeBreakout": 1
+  },
+  "disabledSignals": {
+    "emaCross": 1774193284460,
+    "rsiBounce": 1774194167306
+  },
+  "consecutiveLosses": {
+    "emaCross": 0,
+    "upperBBWithRsi": 1,
+    "bbSqueezeBreakout": 3,
+    "macdCross": 4,
+    "rsiBounce": 0,
+    "vwapReclaim": 1
+  }
+}
