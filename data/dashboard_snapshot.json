@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-22T21:19:37.383Z",
+  "generatedAt": "2026-03-22T21:23:33.469Z",
   "capitalAccount": {
     "connected": true,
     "paperTrading": false,
@@ -74,7 +74,7 @@
       }
     ],
     "positions": [],
-    "fetchedAt": 1774214367399
+    "fetchedAt": 1774214603523
   },
   "botView": {
     "mode": "normal",
@@ -85,8 +85,8 @@
       {
         "symbol": "BTC",
         "category": "crypto",
-        "latestPrice": 67585.95,
-        "lastCandleAt": 1774203540000,
+        "latestPrice": 67480.2,
+        "lastCandleAt": 1774203780000,
         "marketStatus": "TRADEABLE",
         "marketOpen": true,
         "regime": "choppy",
@@ -94,11 +94,11 @@
         "higherTimeframeReason": "higher_timeframe_flat",
         "minScore": 3,
         "minActiveSignals": 2,
-        "signalDirection": "long",
+        "signalDirection": "short",
         "signalScore": 1,
         "activeSignals": 1,
         "reasons": [
-          "macdCross:+1"
+          "bbSqueezeBreakout:-1"
         ],
         "sentimentScore": 0,
         "blockedBySentiment": false,
@@ -109,13 +109,13 @@
         "pretradeReason": "BTC skipped: 3 consecutive losses",
         "correlationAllowed": true,
         "correlationReason": "OK",
-        "setupKey": "BTC|long|macdCross",
+        "setupKey": "BTC|short|bbSqueezeBreakout",
         "setupCooldownUntil": null,
         "cooldownUntil": 1774197197521,
         "instrumentEnabled": true,
         "sizeMultiplier": 1,
         "hasOpenPosition": false,
-        "proposedSize": 0.0010355111,
+        "proposedSize": 0.0010375488,
         "proposedRiskAmount": 0.31499999,
         "decision": {
           "label": "THRESHOLD",
@@ -126,8 +126,8 @@
       {
         "symbol": "ETH",
         "category": "crypto",
-        "latestPrice": 2034.16,
-        "lastCandleAt": 1774203540000,
+        "latestPrice": 2030.5,
+        "lastCandleAt": 1774203780000,
         "marketStatus": "TRADEABLE",
         "marketOpen": true,
         "regime": "choppy",
@@ -165,8 +165,8 @@
       {
         "symbol": "SOL",
         "category": "crypto",
-        "latestPrice": 85.3594,
-        "lastCandleAt": 1774203540000,
+        "latestPrice": 85.253,
+        "lastCandleAt": 1774203780000,
         "marketStatus": "TRADEABLE",
         "marketOpen": true,
         "regime": "choppy",
@@ -176,10 +176,9 @@
         "minActiveSignals": 2,
         "signalDirection": "long",
         "signalScore": 2,
-        "activeSignals": 2,
+        "activeSignals": 1,
         "reasons": [
-          "lowerBBWithRsi:+2",
-          "bbSqueezeBreakout:-1"
+          "emaCross:+2"
         ],
         "sentimentScore": 0,
         "blockedBySentiment": false,
@@ -190,25 +189,25 @@
         "pretradeReason": "SOL skipped: 3 consecutive losses",
         "correlationAllowed": true,
         "correlationReason": "OK",
-        "setupKey": "SOL|long|bbSqueezeBreakout+lowerBBWithRsi",
+        "setupKey": "SOL|long|emaCross",
         "setupCooldownUntil": null,
         "cooldownUntil": 1774192368002,
         "instrumentEnabled": true,
         "sizeMultiplier": 1,
         "hasOpenPosition": false,
-        "proposedSize": 0.81965217,
+        "proposedSize": 0.82067514,
         "proposedRiskAmount": 0.315,
         "decision": {
           "label": "THRESHOLD",
           "tone": "warn",
-          "reason": "Score 2/3, signals 2/2"
+          "reason": "Score 2/3, signals 1/2"
         }
       },
       {
         "symbol": "BNB",
         "category": "crypto",
-        "latestPrice": 621.51,
-        "lastCandleAt": 1774203540000,
+        "latestPrice": 621.52,
+        "lastCandleAt": 1774203780000,
         "marketStatus": "TRADEABLE",
         "marketOpen": true,
         "regime": "choppy",
@@ -216,13 +215,11 @@
         "higherTimeframeReason": "higher_timeframe_flat",
         "minScore": 3,
         "minActiveSignals": 2,
-        "signalDirection": null,
-        "signalScore": 0,
-        "activeSignals": 3,
+        "signalDirection": "long",
+        "signalScore": 2,
+        "activeSignals": 1,
         "reasons": [
-          "lowerBBWithRsi:+2",
-          "macdCross:-1",
-          "bbSqueezeBreakout:-1"
+          "emaCross:+2"
         ],
         "sentimentScore": 0,
         "blockedBySentiment": false,
@@ -233,18 +230,18 @@
         "pretradeReason": "BNB skipped: 3 consecutive losses",
         "correlationAllowed": true,
         "correlationReason": "OK",
-        "setupKey": "BNB|none|bbSqueezeBreakout+lowerBBWithRsi+macdCross",
+        "setupKey": "BNB|long|emaCross",
         "setupCooldownUntil": null,
         "cooldownUntil": 1774193696335,
         "instrumentEnabled": true,
         "sizeMultiplier": 1,
         "hasOpenPosition": false,
-        "proposedSize": null,
-        "proposedRiskAmount": null,
+        "proposedSize": 0.11258207,
+        "proposedRiskAmount": 0.31499999,
         "decision": {
-          "label": "WAITING",
-          "tone": "neutral",
-          "reason": "No direction selected"
+          "label": "THRESHOLD",
+          "tone": "warn",
+          "reason": "Score 2/3, signals 1/2"
         }
       },
       {

@@ -621,14 +621,20 @@ async function tradingLoop(state, candleHistory) {
   const warmEnough = symbolsReadyForTrading.length > 0;
   if (warmEnough) {
     for (const sym of prices.getSymbols()) {
+      // STRICT CHECK: Never enter if ANY position exists for this symbol
+      if (state.openPositions[sym]) {
+        logEntryBlocked(sym, 'open_position_exists', {
+          existingDirection: state.openPositions[sym].direction,
+          existingEntryPrice: state.openPositions[sym].entryPrice,
+        });
+        continue;
+      }
+
       if (isWeekendUtc() && !isWeekendEligibleSymbol(sym)) {
         logEntryBlocked(sym, 'weekend_mode_symbol_disabled');
         continue;
       }
-      if (state.openPositions[sym]) {
-        logEntryBlocked(sym, 'open_position_exists');
-        continue;
-      }
+
       const ins = state.instruments[sym] || { enabled: true, sizeMultiplier: 1 };
       if (!ins.enabled) {
         logEntryBlocked(sym, 'instrument_disabled');
@@ -781,7 +787,25 @@ async function tradingLoop(state, candleHistory) {
 
       const adjustedRiskAmount = Number((size * sizing.stopDistance).toFixed(8));
 
+      // FINAL VALIDATION: Catch race condition of dual opposite positions
+      if (state.openPositions[sym]) {
+        logger.error('MAIN', 'RACE CONDITION DETECTED: Position opened before entry check!', {
+          symbol: sym,
+          attemptedDirection: sig.direction,
+          existingDirection: state.openPositions[sym].direction,
+        });
+        logEntryBlocked(sym, 'opposite_position_already_open');
+        continue;
+      }
+
       executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
+      
+      // Verify position was created
+      if (!state.openPositions[sym]) {
+        logger.error('MAIN', 'EXECUTOR FAILED TO CREATE POSITION', { symbol: sym, direction: sig.direction });
+        continue;
+      }
+
       state.openPositions[sym].atrMultiplier = state.params.atrMultiplier;
       state.openPositions[sym].entryRegime = effectiveReq.regime;
       state.openPositions[sym].setupKey = setupKey;
@@ -853,6 +877,49 @@ async function main() {
   await hydrateStartupHistory(candleHistory);
 
   executor.init(state, savedTrades);
+  
+  // SAFETY CHECK: Detect dual opposite positions at startup
+  const openTrades = executor.getTradeLog().filter(t => !t.exitTime);
+  const positionsBySymbol = {};
+  for (const trade of openTrades) {
+    if (!positionsBySymbol[trade.symbol]) {
+      positionsBySymbol[trade.symbol] = [];
+    }
+    positionsBySymbol[trade.symbol].push(trade);
+  }
+  for (const [sym, posList] of Object.entries(positionsBySymbol)) {
+    if (posList.length > 1) {
+      const directions = new Set(posList.map(p => p.direction));
+      if (directions.size > 1) {
+        logger.error('MAIN', 'CRITICAL: Dual opposite positions detected at startup!', {
+          symbol: sym,
+          positions: posList.map(p => ({ direction: p.direction, entryPrice: p.entryPrice, size: p.size })),
+        });
+        // Auto-close the losing position
+        let worstTrade = null;
+        let worstPnL = Infinity;
+        for (const trade of posList) {
+          const priceDiff = trade.direction === 'long'
+            ? (trade.currentPrice || trade.entryPrice) - trade.entryPrice
+            : trade.entryPrice - (trade.currentPrice || trade.entryPrice);
+          const pnl = priceDiff * trade.size;
+          if (pnl < worstPnL) {
+            worstPnL = pnl;
+            worstTrade = trade;
+          }
+        }
+        if (worstTrade && worstPnL < 0) {
+          logger.warn('MAIN', 'Auto-closing worst losing position to prevent hedge bleed', {
+            symbol: sym,
+            direction: worstTrade.direction,
+            pnl: worstPnL,
+          });
+          executor.exit(sym, 'manual');
+        }
+      }
+    }
+  }
+
   memoryMod.init(savedMemory.entries || [], savedMemory.conditionWeights || {});
   if (savedSignals) signalsMod.loadState(savedSignals);
   optimizer.init(state);
