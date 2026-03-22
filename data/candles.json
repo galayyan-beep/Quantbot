@@ -3,96 +3,6 @@
     {
       "symbol": "BTC",
       "open": 68765.45,
-      "high": 68827.75,
-      "low": 68765.35,
-      "close": 68805.05,
-      "volume": 69,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68827.75,
-      "low": 68765.35,
-      "close": 68805.05,
-      "volume": 69,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68827.75,
-      "low": 68765.35,
-      "close": 68805.05,
-      "volume": 69,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68827.75,
-      "low": 68765.35,
-      "close": 68805.05,
-      "volume": 69,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68833.55,
-      "low": 68765.35,
-      "close": 68833.55,
-      "volume": 104,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68833.55,
-      "low": 68765.35,
-      "close": 68833.55,
-      "volume": 104,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68833.55,
-      "low": 68765.35,
-      "close": 68833.55,
-      "volume": 104,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68833.55,
-      "low": 68765.35,
-      "close": 68833.55,
-      "volume": 104,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68833.55,
-      "low": 68765.35,
-      "close": 68833.55,
-      "volume": 104,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
-      "high": 68884.55,
-      "low": 68765.35,
-      "close": 68883.7,
-      "volume": 190,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BTC",
-      "open": 68765.45,
       "high": 68884.55,
       "low": 68765.35,
       "close": 68883.7,
@@ -493,6 +403,96 @@
       "low": 68839.3,
       "close": 68839.3,
       "volume": 1,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68853.85,
+      "volume": 50,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68853.85,
+      "volume": 50,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68853.85,
+      "volume": 50,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68853.85,
+      "volume": 50,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68853.85,
+      "volume": 50,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68851.85,
+      "volume": 71,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68851.85,
+      "volume": 71,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68851.85,
+      "volume": 71,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68848.25,
+      "volume": 94,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BTC",
+      "open": 68839.3,
+      "high": 68855.35,
+      "low": 68839.3,
+      "close": 68848.25,
+      "volume": 94,
       "timestamp": 1774181220000
     }
   ],
@@ -500,96 +500,6 @@
     {
       "symbol": "ETH",
       "open": 2079.23,
-      "high": 2081.38,
-      "low": 2079.16,
-      "close": 2080.25,
-      "volume": 70,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2081.38,
-      "low": 2079.16,
-      "close": 2080.25,
-      "volume": 70,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2081.38,
-      "low": 2079.16,
-      "close": 2080.25,
-      "volume": 70,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2081.38,
-      "low": 2079.16,
-      "close": 2080.25,
-      "volume": 70,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2081.63,
-      "low": 2079.16,
-      "close": 2081.63,
-      "volume": 93,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2081.63,
-      "low": 2079.16,
-      "close": 2081.63,
-      "volume": 93,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2081.63,
-      "low": 2079.16,
-      "close": 2081.63,
-      "volume": 93,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2081.63,
-      "low": 2079.16,
-      "close": 2081.63,
-      "volume": 93,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2081.63,
-      "low": 2079.16,
-      "close": 2081.63,
-      "volume": 93,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
-      "high": 2082.65,
-      "low": 2079.16,
-      "close": 2082.55,
-      "volume": 154,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "ETH",
-      "open": 2079.23,
       "high": 2082.65,
       "low": 2079.16,
       "close": 2082.55,
@@ -990,6 +900,96 @@
       "low": 2080.99,
       "close": 2081.52,
       "volume": 45,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.52,
+      "volume": 45,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.52,
+      "volume": 45,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.52,
+      "volume": 45,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.52,
+      "volume": 45,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.53,
+      "volume": 61,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.53,
+      "volume": 61,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.53,
+      "volume": 61,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.53,
+      "volume": 61,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.53,
+      "volume": 61,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "ETH",
+      "open": 2080.99,
+      "high": 2081.75,
+      "low": 2080.99,
+      "close": 2081.09,
+      "volume": 81,
       "timestamp": 1774181220000
     }
   ],
@@ -997,96 +997,6 @@
     {
       "symbol": "SOL",
       "open": 87.0402,
-      "high": 87.1466,
-      "low": 87.0402,
-      "close": 87.1034,
-      "volume": 38,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1466,
-      "low": 87.0402,
-      "close": 87.1034,
-      "volume": 38,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1466,
-      "low": 87.0402,
-      "close": 87.1034,
-      "volume": 38,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1466,
-      "low": 87.0402,
-      "close": 87.1034,
-      "volume": 38,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1466,
-      "low": 87.0402,
-      "close": 87.1034,
-      "volume": 38,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1566,
-      "low": 87.0402,
-      "close": 87.1566,
-      "volume": 53,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1566,
-      "low": 87.0402,
-      "close": 87.1566,
-      "volume": 53,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1566,
-      "low": 87.0402,
-      "close": 87.1566,
-      "volume": 53,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1566,
-      "low": 87.0402,
-      "close": 87.1566,
-      "volume": 53,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
-      "high": 87.1566,
-      "low": 87.0402,
-      "close": 87.1566,
-      "volume": 53,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "SOL",
-      "open": 87.0402,
       "high": 87.1566,
       "low": 87.0402,
       "close": 87.1566,
@@ -1487,6 +1397,96 @@
       "low": 87.1516,
       "close": 87.1516,
       "volume": 1,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1516,
+      "low": 87.1516,
+      "close": 87.1516,
+      "volume": 1,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1682,
+      "volume": 17,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1682,
+      "volume": 17,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1682,
+      "volume": 17,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1732,
+      "volume": 20,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1732,
+      "volume": 20,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1732,
+      "volume": 20,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1732,
+      "volume": 20,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1732,
+      "volume": 20,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "SOL",
+      "open": 87.1516,
+      "high": 87.1882,
+      "low": 87.1516,
+      "close": 87.1732,
+      "volume": 20,
       "timestamp": 1774181220000
     }
   ],
@@ -1494,96 +1494,6 @@
     {
       "symbol": "BNB",
       "open": 629.05,
-      "high": 629.49,
-      "low": 629.05,
-      "close": 629.35,
-      "volume": 44,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.49,
-      "low": 629.05,
-      "close": 629.35,
-      "volume": 44,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.49,
-      "low": 629.05,
-      "close": 629.35,
-      "volume": 44,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.49,
-      "low": 629.05,
-      "close": 629.35,
-      "volume": 44,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.49,
-      "low": 629.05,
-      "close": 629.35,
-      "volume": 44,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.6,
-      "low": 629.05,
-      "close": 629.59,
-      "volume": 63,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.6,
-      "low": 629.05,
-      "close": 629.59,
-      "volume": 63,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.6,
-      "low": 629.05,
-      "close": 629.59,
-      "volume": 63,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.94,
-      "low": 629.05,
-      "close": 629.92,
-      "volume": 109,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
-      "high": 629.94,
-      "low": 629.05,
-      "close": 629.92,
-      "volume": 109,
-      "timestamp": 1774181100000
-    },
-    {
-      "symbol": "BNB",
-      "open": 629.05,
       "high": 629.94,
       "low": 629.05,
       "close": 629.92,
@@ -1984,6 +1894,96 @@
       "low": 629.53,
       "close": 629.53,
       "volume": 1,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.53,
+      "low": 629.53,
+      "close": 629.53,
+      "volume": 1,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.59,
+      "volume": 23,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.59,
+      "volume": 23,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.59,
+      "volume": 23,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.57,
+      "volume": 33,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.57,
+      "volume": 33,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.57,
+      "volume": 33,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.57,
+      "volume": 33,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.57,
+      "volume": 33,
+      "timestamp": 1774181220000
+    },
+    {
+      "symbol": "BNB",
+      "open": 629.53,
+      "high": 629.64,
+      "low": 629.52,
+      "close": 629.57,
+      "volume": 33,
       "timestamp": 1774181220000
     }
   ],
