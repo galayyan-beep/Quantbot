@@ -122,6 +122,43 @@ function signalStats(trades) {
   return bySignal;
 }
 
+function recentTradeHealth(trades, n = 30) {
+  const recent = (trades || []).filter(t => t && (t.exitTime || t.status === 'closed')).slice(-n);
+  if (!recent.length) {
+    return {
+      count: 0,
+      winRate: 0,
+      lossRate: 0,
+      stopLossRate: 0,
+      fastStopRate: 0,
+      bySymbol: {},
+    };
+  }
+
+  const wins = recent.filter(t => t.isWin).length;
+  const losses = recent.length - wins;
+  const stopLosses = recent.filter(t => t.exitReason === 'stop_loss').length;
+  const fastStops = recent.filter(t => Number(t.holdCandles || 0) <= 1).length;
+
+  const bySymbol = {};
+  for (const t of recent) {
+    if (!bySymbol[t.symbol]) bySymbol[t.symbol] = { total: 0, losses: 0, fastStops: 0, pnl: 0 };
+    bySymbol[t.symbol].total += 1;
+    if (!t.isWin) bySymbol[t.symbol].losses += 1;
+    if (Number(t.holdCandles || 0) <= 1) bySymbol[t.symbol].fastStops += 1;
+    bySymbol[t.symbol].pnl += Number(t.pnl || 0);
+  }
+
+  return {
+    count: recent.length,
+    winRate: wins / recent.length,
+    lossRate: losses / recent.length,
+    stopLossRate: stopLosses / recent.length,
+    fastStopRate: fastStops / recent.length,
+    bySymbol,
+  };
+}
+
 // ─── LAYER 1: Fast loop — every 5 minutes ────────────────────────────────────
 async function layer1Fast(trades) {
   if (!trades || trades.length < 10) return;
@@ -132,8 +169,8 @@ async function layer1Fast(trades) {
   logger.optim('L1', 'Running fast parameter review', stats);
 
   const PARAM_BOUNDS = {
-    riskPercent:        [3,   10],
-    atrMultiplier:      [1,    3],
+    riskPercent:        [1,    3],
+    atrMultiplier:      [2.5,  3],
     minScore:           [3,    3],
     momentumThreshold:  [0.001, 0.008],
     rsiBuyLevel:        [20,  35],
@@ -310,7 +347,7 @@ Correlation risk: ${JSON.stringify(_state.correlationSummary || {})}`;
 
   // Apply any parameter suggestions
   const PARAM_BOUNDS = {
-    riskPercent: [3, 10], atrMultiplier: [1, 3], minScore: [3, 3],
+    riskPercent: [1, 3], atrMultiplier: [2.5, 3], minScore: [3, 3],
     momentumThreshold: [0.001, 0.008], rsiBuyLevel: [20, 35],
     rsiSellLevel: [65, 80], cooldownCandles: [5, 20], minHoldCandles: [3, 10],
   };
@@ -368,9 +405,69 @@ Return ONLY JSON: { "bestCondition": "fingerprint string", "worstCondition": "fi
  * Returns { action: string } or null.
  */
 async function layer5SelfHeal(trades, drawdown, profitFactorWindow) {
+  const health = recentTradeHealth(trades, 30);
+
+  // Data-driven anti-chop response:
+  // If recent trades are mostly one-candle/stop-loss exits, widen and slow entries.
+  if (health.count >= 12 && (health.fastStopRate >= 0.45 || health.stopLossRate >= 0.70 || health.winRate <= 0.15)) {
+    const lastTuneAt = Number(_state.lastStopoutTuningAt || 0);
+    const tuneCooldownMs = 15 * 60 * 1000;
+    if (Date.now() - lastTuneAt >= tuneCooldownMs) {
+      const before = {
+        atrMultiplier: _state.params.atrMultiplier,
+        cooldownCandles: _state.params.cooldownCandles,
+        minHoldCandles: _state.params.minHoldCandles,
+        momentumThreshold: _state.params.momentumThreshold,
+      };
+
+      _state.params.atrMultiplier = Math.min(3.0, Math.max(2.5, Number(_state.params.atrMultiplier || 2.5) + 0.2));
+      _state.params.cooldownCandles = Math.min(20, Math.max(8, Number(_state.params.cooldownCandles || 10) + 2));
+      _state.params.minHoldCandles = Math.min(10, Math.max(6, Number(_state.params.minHoldCandles || 5) + 1));
+      _state.params.momentumThreshold = Math.min(0.008, Number(_state.params.momentumThreshold || 0.003) + 0.0004);
+      _state.lastStopoutTuningAt = Date.now();
+
+      const worstSymbols = Object.entries(health.bySymbol)
+        .filter(([, s]) => s.total >= 3)
+        .map(([sym, s]) => ({
+          symbol: sym,
+          lossRate: s.losses / s.total,
+          fastRate: s.fastStops / s.total,
+          pnl: s.pnl,
+        }))
+        .filter(s => s.lossRate >= 0.80 && s.fastRate >= 0.50)
+        .sort((a, b) => a.pnl - b.pnl)
+        .slice(0, 2);
+
+      if (_state.instruments) {
+        for (const row of worstSymbols) {
+          _state.instruments[row.symbol] = _state.instruments[row.symbol] || {};
+          _state.instruments[row.symbol].enabled = false;
+          _state.instruments[row.symbol].disabledUntil = Date.now() + 60 * 60 * 1000;
+        }
+      }
+
+      logger.warn('L5', 'Data-driven stopout mitigation applied', {
+        health: {
+          count: health.count,
+          winRate: Number(health.winRate.toFixed(3)),
+          stopLossRate: Number(health.stopLossRate.toFixed(3)),
+          fastStopRate: Number(health.fastStopRate.toFixed(3)),
+        },
+        before,
+        after: {
+          atrMultiplier: _state.params.atrMultiplier,
+          cooldownCandles: _state.params.cooldownCandles,
+          minHoldCandles: _state.params.minHoldCandles,
+          momentumThreshold: _state.params.momentumThreshold,
+        },
+        temporarilyDisabled: worstSymbols,
+      });
+    }
+  }
+
   // ── Profit factor drop below 0.8 in any 30-min window ─────────────────────
   if (profitFactorWindow !== null && profitFactorWindow < 0.8) {
-    const newRisk = Math.max(3, _state.params.riskPercent * 0.5);
+    const newRisk = Math.max(1, _state.params.riskPercent * 0.5);
     if (_state.params.riskPercent !== newRisk) {
       logger.warn('L5', `PF < 0.8 — cutting risk in half`, {
         pf: profitFactorWindow.toFixed(3), from: _state.params.riskPercent, to: newRisk,
@@ -433,7 +530,7 @@ Return ONLY JSON with new parameter values and brief reasons:
   const result       = await callClaude(systemPrompt, userContent, 1024);
 
   const defaults = {
-    riskPercent: 2.5, atrMultiplier: 1.5, minScore: 3,
+    riskPercent: 2.5, atrMultiplier: 2.5, minScore: 3,
     momentumThreshold: 0.003, rsiBuyLevel: 28, rsiSellLevel: 72,
     cooldownCandles: 15, minHoldCandles: 7,
   };
@@ -447,7 +544,7 @@ Return ONLY JSON with new parameter values and brief reasons:
   };
 
   const PARAM_BOUNDS = {
-    riskPercent: [2, 5], atrMultiplier: [1, 2.5], minScore: [3, 3],
+    riskPercent: [1, 3], atrMultiplier: [2.5, 3], minScore: [3, 3],
     momentumThreshold: [0.001, 0.006], rsiBuyLevel: [22, 35],
     rsiSellLevel: [65, 78], cooldownCandles: [10, 20], minHoldCandles: [5, 10],
   };
