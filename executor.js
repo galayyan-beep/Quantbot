@@ -65,21 +65,31 @@ function init(sharedState, savedTrades = []) {
  * @returns {Object} position object
  */
 function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reasons, sentimentScore = 0) {
-  // GUARD: Prevent entering opposite direction if position already exists
+  // Never allow dual-sided exposure on same symbol.
+  // If opposite direction exists, close it first, then proceed.
   const existingPos = _state.openPositions[symbol];
   if (existingPos) {
-    if (existingPos.direction !== direction) {
-      logger.error('EXECUTOR', 'Entry blocked: opposite position already open', {
+    if (existingPos.direction === direction) {
+      logger.warn('EXECUTOR', 'Entry blocked: position already exists', { symbol, direction });
+      return null;
+    }
+
+    logger.warn('EXECUTOR', 'Opposite position detected, closing before reverse entry', {
+      symbol,
+      attemptedDirection: direction,
+      existingDirection: existingPos.direction,
+      existingEntryPrice: existingPos.entryPrice,
+    });
+
+    const closed = exit(symbol, 'signal_reverse');
+    if (!closed) {
+      logger.error('EXECUTOR', 'Entry blocked: failed to close opposite position before reverse', {
         symbol,
         attemptedDirection: direction,
         existingDirection: existingPos.direction,
-        existingEntryPrice: existingPos.entryPrice,
       });
-      return null; // Reject this entry
+      return null;
     }
-    // Also reject if same direction (duplicate entry)
-    logger.warn('EXECUTOR', 'Entry blocked: position already exists', { symbol, direction });
-    return null;
   }
 
   const side         = direction === 'long' ? 'buy' : 'sell';

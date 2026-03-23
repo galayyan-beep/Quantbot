@@ -21,7 +21,7 @@ const WARMUP_CANDLES = 55;
 const TICK_INTERVAL_MS = 2000;
 const DEFAULT_PARAMS = {
   riskPercent: 3,
-  atrMultiplier: 1.5,
+  atrMultiplier: 2.5,
   minScore: 3,
   momentumThreshold: 0.003,
   rsiBuyLevel: 28,
@@ -183,6 +183,7 @@ function loadState() {
     if (saved.capital === undefined) saved.capital = INITIAL_CAPITAL;
     if (saved.peakCapital === undefined) saved.peakCapital = saved.capital;
     saved.params = { ...DEFAULT_PARAMS, ...(saved.params || {}) };
+    if ((saved.params.atrMultiplier || 0) < 2.5) saved.params.atrMultiplier = 2.5;
     if ((saved.params.riskPercent || 0) > 3) saved.params.riskPercent = 3;
     if ((saved.params.minScore || 0) !== 3) saved.params.minScore = 3;
     saved.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
@@ -621,15 +622,6 @@ async function tradingLoop(state, candleHistory) {
   const warmEnough = symbolsReadyForTrading.length > 0;
   if (warmEnough) {
     for (const sym of prices.getSymbols()) {
-      // STRICT CHECK: Never enter if ANY position exists for this symbol
-      if (state.openPositions[sym]) {
-        logEntryBlocked(sym, 'open_position_exists', {
-          existingDirection: state.openPositions[sym].direction,
-          existingEntryPrice: state.openPositions[sym].entryPrice,
-        });
-        continue;
-      }
-
       if (isWeekendUtc() && !isWeekendEligibleSymbol(sym)) {
         logEntryBlocked(sym, 'weekend_mode_symbol_disabled');
         continue;
@@ -704,6 +696,34 @@ async function tradingLoop(state, candleHistory) {
           regime: effectiveReq.regime,
         });
         continue;
+      }
+
+      const existingPos = state.openPositions[sym];
+      if (existingPos && existingPos.direction === sig.direction) {
+        logEntryBlocked(sym, 'open_position_same_direction', {
+          direction: sig.direction,
+          existingEntryPrice: existingPos.entryPrice,
+          regime: effectiveReq.regime,
+        });
+        continue;
+      }
+
+      if (existingPos && existingPos.direction !== sig.direction) {
+        logger.warn('MAIN', 'Closing opposite position before reverse entry', {
+          symbol: sym,
+          existingDirection: existingPos.direction,
+          nextDirection: sig.direction,
+          regime: effectiveReq.regime,
+        });
+        const reversed = executor.exit(sym, 'signal_reverse');
+        if (!reversed) {
+          logEntryBlocked(sym, 'reverse_close_failed', {
+            existingDirection: existingPos.direction,
+            attemptedDirection: sig.direction,
+            regime: effectiveReq.regime,
+          });
+          continue;
+        }
       }
 
       const dd = risk.calcDrawdown(state.capital, state.peakCapital);
@@ -787,17 +807,6 @@ async function tradingLoop(state, candleHistory) {
 
       const adjustedRiskAmount = Number((size * sizing.stopDistance).toFixed(8));
 
-      // FINAL VALIDATION: Catch race condition of dual opposite positions
-      if (state.openPositions[sym]) {
-        logger.error('MAIN', 'RACE CONDITION DETECTED: Position opened before entry check!', {
-          symbol: sym,
-          attemptedDirection: sig.direction,
-          existingDirection: state.openPositions[sym].direction,
-        });
-        logEntryBlocked(sym, 'opposite_position_already_open');
-        continue;
-      }
-
       executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
       
       // Verify position was created
@@ -855,6 +864,7 @@ async function main() {
   state.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
   state.PAPER_TRADING = false;
   if ((state.params.riskPercent || 0) > 3) state.params.riskPercent = 3;
+  if ((state.params.atrMultiplier || 0) < 2.5) state.params.atrMultiplier = 2.5;
   state.params.minScore = 3;
 
   const candleHistory = logger.readJSON('candles.json', Object.fromEntries(prices.getSymbols().map(s => [s, []])));

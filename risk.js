@@ -90,7 +90,7 @@ function calcPositionSize(symbol, direction, entryPrice, atrValue, params, capit
 
   const riskPct       = Math.min(params.riskPercent || 3, 3);
   const info = INSTRUMENTS[symbol] || {};
-  const baseAtrMulSL  = params.atrMultiplier || 1.5;
+  const baseAtrMulSL  = Math.max(params.atrMultiplier || 2.5, 2.5);
   const atrPct = atrValue / entryPrice;
   const targetAtrPctByCategory = {
     crypto: 0.012,
@@ -101,15 +101,13 @@ function calcPositionSize(symbol, direction, entryPrice, atrValue, params, capit
   const targetAtrPct = targetAtrPctByCategory[info.category] || 0.004;
   const volTargetMultiplier = Math.max(0.6, Math.min(1.4, targetAtrPct / Math.max(atrPct, 0.0001)));
   const cryptoMinStopPct = 0.0045;
-  const cryptoAtrMulFloor = 2.2;
+  const cryptoAtrMulFloor = 2.5;
 
   let atrMulSL = baseAtrMulSL;
   if (info.category === 'crypto') {
     atrMulSL = Math.max(baseAtrMulSL, cryptoAtrMulFloor);
   }
-  const atrMulTP = info.category === 'crypto'
-    ? Math.max(atrMulSL * 1.8, 2.8)
-    : atrMulSL * 2;
+  const atrMulTP = 4.0;
 
   const riskAmount    = (capital * riskPct / 100) * volTargetMultiplier;
   let stopDistance  = atrMulSL * atrValue;
@@ -204,7 +202,7 @@ function updateTrailingStop(position, currentPrice, atrValue) {
   if (!atrValue) return null;
 
   const { direction, entryPrice, trailingStop, atrMultiplier: atrMul } = position;
-  const mul = atrMul || 1.5;
+  const mul = atrMul || 2.5;
 
   if (direction === 'long') {
     const newStop = round8(currentPrice - mul * atrValue);
