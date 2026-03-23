@@ -24,16 +24,17 @@ const logger = require('./logger');
 const sentiment = require('./sentiment');
 
 // ─── Default weights ─────────────────────────────────────────────────────────
+// Optimized for live trading: higher weights on proven profit generators
 const DEFAULT_WEIGHTS = {
-  emaCross:          2,
-  vwapReclaim:       2,
-  momentumSurge:     2,
+  emaCross:          3,
+  vwapReclaim:       2.5,
+  momentumSurge:     3,
   lowerBBWithRsi:    2,
-  macdCross:         1,
+  macdCross:         1.5,
   rsiBounce:         1,
-  bbSqueezeBreakout: 1,
-  trendContinuation: 2,
-  cryptoBreakout:    2,
+  bbSqueezeBreakout: 1.5,
+  trendContinuation: 3,
+  cryptoBreakout:    2.5,
 };
 
 // Runtime state loaded/saved to signals.json

@@ -20,14 +20,14 @@ const MAX_CANDLE_HIST = 220;
 const WARMUP_CANDLES = 55;
 const TICK_INTERVAL_MS = 2000;
 const DEFAULT_PARAMS = {
-  riskPercent: 3,
+  riskPercent: 2,
   atrMultiplier: 2.5,
-  minScore: 3,
-  momentumThreshold: 0.003,
+  minScore: 4,
+  momentumThreshold: 0.0035,
   rsiBuyLevel: 28,
   rsiSellLevel: 72,
-  cooldownCandles: 10,
-  minHoldCandles: 5,
+  cooldownCandles: 12,
+  minHoldCandles: 6,
   maxPositions: 5,
 };
 

@@ -88,7 +88,7 @@ function isCorrelated(symbol, openPositions) {
 function calcPositionSize(symbol, direction, entryPrice, atrValue, params, capital, openPositions) {
   if (!atrValue || atrValue <= 0 || !entryPrice || entryPrice <= 0) return null;
 
-  const riskPct       = Math.min(params.riskPercent || 3, 3);
+  const riskPct       = Math.min(params.riskPercent || 2, 3);
   const info = INSTRUMENTS[symbol] || {};
   const baseAtrMulSL  = Math.max(params.atrMultiplier || 2.5, 2.5);
   const atrPct = atrValue / entryPrice;
@@ -107,7 +107,7 @@ function calcPositionSize(symbol, direction, entryPrice, atrValue, params, capit
   if (info.category === 'crypto') {
     atrMulSL = Math.max(baseAtrMulSL, cryptoAtrMulFloor);
   }
-  const atrMulTP = 4.0;
+  const atrMulTP = 5.0;
 
   const riskAmount    = (capital * riskPct / 100) * volTargetMultiplier;
   let stopDistance  = atrMulSL * atrValue;

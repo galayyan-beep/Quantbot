@@ -171,12 +171,12 @@ async function layer1Fast(trades) {
   const PARAM_BOUNDS = {
     riskPercent:        [1,    3],
     atrMultiplier:      [2.5,  3],
-    minScore:           [3,    3],
-    momentumThreshold:  [0.001, 0.008],
+    minScore:           [4,    5],
+    momentumThreshold:  [0.002, 0.009],
     rsiBuyLevel:        [20,  35],
     rsiSellLevel:       [65,  80],
-    cooldownCandles:    [5,   20],
-    minHoldCandles:     [3,   10],
+    cooldownCandles:    [8,   20],
+    minHoldCandles:     [5,   12],
   };
 
   const systemPrompt = `You are a quantitative trading analyst evaluating a paper trading bot's performance.

@@ -1,5 +1,184 @@
 {
-  "warning": "Insufficient historical data from Capital.com",
-  "sharpeRatio": 0,
-  "maxDrawdown": 1
+  "generatedAt": "2026-03-23T07:25:04.137Z",
+  "metrics": {
+    "startedCapital": 10000,
+    "finalCapital": 9882.03,
+    "totalReturn": -0.011796999999999934,
+    "annualizedReturn": -0.005053276640533677,
+    "maxDrawdown": 0.01310375286525931,
+    "maxDrawdownAt": "2025-10-21T21:00:00.000Z",
+    "sharpeRatio": -9.644282463654212,
+    "winRate": 0.2871287128712871,
+    "profitFactor": 0.6785948060865408,
+    "averageWin": 8.588499934004924,
+    "averageLoss": -5.097676679567655,
+    "bestTrade": {
+      "symbol": "ETH",
+      "direction": "short",
+      "entry": 2511.22,
+      "entryTime": 1740344400000,
+      "size": 0.027874897,
+      "stopLoss": 2911.3271,
+      "takeProfit": 1711.0057,
+      "reasons": [
+        "emaCross:-2",
+        "momentumSurge:-2",
+        "macdCross:-1",
+        "trendContinuation:-2"
+      ],
+      "hold": 41,
+      "exitTime": 1743886800000,
+      "pnl": 22.305891190427097,
+      "holdDays": 41
+    },
+    "worstTrade": {
+      "symbol": "SOL",
+      "direction": "long",
+      "entry": 202.0337,
+      "entryTime": 1760389200000,
+      "size": 0.34647685,
+      "stopLoss": 145.28309,
+      "takeProfit": 315.53491,
+      "reasons": [
+        "momentumSurge:+2",
+        "macdCross:+1"
+      ],
+      "hold": 30,
+      "exitTime": 1762981200000,
+      "pnl": -19.66277258837851,
+      "holdDays": 30
+    },
+    "totalTrades": 101,
+    "averageHoldDays": 29.00990099009901
+  },
+  "breakdown": {
+    "byInstrument": {
+      "USDJPY": {
+        "pnl": -5.860990059713226,
+        "wins": 2,
+        "total": 8
+      },
+      "GOLD": {
+        "pnl": -0.6349636250113209,
+        "wins": 1,
+        "total": 4
+      },
+      "BNB": {
+        "pnl": -10.498099626022299,
+        "wins": 2,
+        "total": 7
+      },
+      "SILVER": {
+        "pnl": -2.516789400172616,
+        "wins": 4,
+        "total": 10
+      },
+      "DAX": {
+        "pnl": -8.0863268900092,
+        "wins": 2,
+        "total": 7
+      },
+      "BTC": {
+        "pnl": -20.673244812232078,
+        "wins": 2,
+        "total": 8
+      },
+      "SOL": {
+        "pnl": -43.662670875262904,
+        "wins": 1,
+        "total": 6
+      },
+      "SPX": {
+        "pnl": 3.5116505860915814,
+        "wins": 2,
+        "total": 5
+      },
+      "AUDUSD": {
+        "pnl": 10.145575683552718,
+        "wins": 3,
+        "total": 6
+      },
+      "GBPUSD": {
+        "pnl": -12.206570564445606,
+        "wins": 0,
+        "total": 7
+      },
+      "OIL": {
+        "pnl": -24.778220008590267,
+        "wins": 2,
+        "total": 11
+      },
+      "NQ": {
+        "pnl": 4.626348708792699,
+        "wins": 3,
+        "total": 6
+      },
+      "ETH": {
+        "pnl": -10.72493221083059,
+        "wins": 2,
+        "total": 8
+      },
+      "EURUSD": {
+        "pnl": 3.3930102511246867,
+        "wins": 3,
+        "total": 8
+      }
+    },
+    "bySignal": {
+      "momentumSurge": {
+        "pnl": -117.47894696051148,
+        "wins": 15,
+        "total": 58
+      },
+      "vwapReclaim": {
+        "pnl": 20.61600898737459,
+        "wins": 5,
+        "total": 9
+      },
+      "emaCross": {
+        "pnl": -33.92301427236423,
+        "wins": 7,
+        "total": 29
+      },
+      "macdCross": {
+        "pnl": 12.819729402772705,
+        "wins": 2,
+        "total": 5
+      }
+    },
+    "byAssetClass": {
+      "forex": {
+        "pnl": -4.528974689481433,
+        "wins": 8,
+        "total": 29
+      },
+      "commodity": {
+        "pnl": -27.929973033774207,
+        "wins": 7,
+        "total": 25
+      },
+      "crypto": {
+        "pnl": -85.55894752434787,
+        "wins": 7,
+        "total": 29
+      },
+      "index": {
+        "pnl": 0.05167240487508051,
+        "wins": 7,
+        "total": 18
+      }
+    },
+    "bestMonth": {
+      "month": "2024-09",
+      "pnl": 17.676157723406007,
+      "wins": 4,
+      "total": 7
+    },
+    "worstMonth": {
+      "month": "2025-11",
+      "pnl": -30.70593868767547,
+      "wins": 0,
+      "total": 2
+    }
+  }
 }
