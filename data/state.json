@@ -4,7 +4,7 @@
   "openPositions": {},
   "params": {
     "riskPercent": 3,
-    "atrMultiplier": 1.5,
+    "atrMultiplier": 2.5,
     "minScore": 3,
     "momentumThreshold": 0.003,
     "rsiBuyLevel": 28,
