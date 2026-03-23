@@ -106,10 +106,10 @@
   "lastPaperHourSummaryAt": 0,
   "lastPaperVerdictAt": 0,
   "lastDailyReportAt": 1774189183479,
-  "LIVE_TRADING": true,
+  "LIVE_TRADING": false,
   "backtestSummary": {
-    "sharpeRatio": -9.343245971778556,
-    "maxDrawdown": 0.01647445307887477
+    "sharpeRatio": 0,
+    "maxDrawdown": 1
   },
   "sentimentSummary": {
     "updatedAt": 1774214099535,
