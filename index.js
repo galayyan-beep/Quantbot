@@ -764,7 +764,15 @@ async function main() {
 
   const state = loadState();
   state.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
-  if (state.LIVE_TRADING) state.PAPER_TRADING = false;
+  if (state.LIVE_TRADING) {
+    state.PAPER_TRADING = false;
+  } else {
+    state.PAPER_TRADING = true;
+  }
+  // Set paper trading start time on first boot
+  if (state.PAPER_TRADING && !state.paperTradingStartTime) {
+    state.paperTradingStartTime = Date.now();
+  }
   if ((state.params.riskPercent || 0) > 2) state.params.riskPercent = 2;
   if ((state.params.atrMultiplier || 0) < 2.5) state.params.atrMultiplier = 2.5;
   if ((state.params.minScore || 0) < 1) state.params.minScore = 1;

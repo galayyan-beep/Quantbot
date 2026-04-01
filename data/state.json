@@ -1,6 +1,6 @@
 {
-  "capital": 99.68,
-  "peakCapital": 99.68,
+  "capital": 10000,
+  "peakCapital": 10000,
   "openPositions": {},
   "params": {
     "riskPercent": 1.5,
@@ -36,12 +36,12 @@
     "NQ": { "enabled": false, "sizeMultiplier": 1 },
     "DAX": { "enabled": false, "sizeMultiplier": 1 }
   },
-  "PAPER_TRADING": false,
+  "PAPER_TRADING": true,
   "paperTradingStartTime": 0,
   "lastPaperHourSummaryAt": 0,
   "lastPaperVerdictAt": 0,
   "lastDailyReportAt": 0,
-  "LIVE_TRADING": true,
+  "LIVE_TRADING": false,
   "backtestSummary": {},
   "sentimentSummary": {},
   "correlationSummary": {},
