@@ -11,11 +11,13 @@ function init(savedPrices = {}, opts = {}) {
   for (const sym of Object.keys(INSTRUMENTS)) {
     prices[sym] = savedPrices[sym] || 0;
   }
+  // Default to LIVE if LIVE_TRADING env var is set, otherwise check opts
+  const isLive = process.env.LIVE_TRADING === 'true';
   const paperTrading = opts.paperTrading !== undefined
     ? !!opts.paperTrading
-    : process.env.PAPER_TRADING !== 'false';
+    : !isLive;
   broker = new CapitalClient({ paperTrading });
-  logger.info('PRICES', 'Capital.com market data adapter initialized', { paperTrading });
+  logger.info('PRICES', 'Capital.com market data adapter initialized', { paperTrading, isLive });
 }
 
 function setMode({ paperTrading }) {
@@ -24,7 +26,7 @@ function setMode({ paperTrading }) {
 }
 
 async function tick() {
-  if (!broker) init({}, {});
+  if (!broker) init({}, { paperTrading: process.env.LIVE_TRADING !== 'true' });
   const symbols = Object.keys(INSTRUMENTS);
   const candles = await broker.fetchBatch(symbols);
   for (const sym of symbols) {
