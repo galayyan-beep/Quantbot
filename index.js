@@ -131,10 +131,12 @@ function adaptiveEntryRequirements(symbol, ind, params) {
 
   if (regime === 'trending') {
     minScore = Math.max(2, baseMinScore - 1);
-    minActiveSignals = 1;
+    minActiveSignals = 1;   // single strong signal OK in trends
   } else if (regime === 'choppy') {
-    minScore = Math.min(4, baseMinScore + 1);
+    minScore = baseMinScore + 1;
     minActiveSignals = 2;
+  } else {
+    minActiveSignals = 2;   // normal: need 2 signals agreeing
   }
 
   if (weekendMode && category === 'crypto') {
@@ -707,27 +709,6 @@ async function tradingLoop(state, candleHistory) {
         continue;
       }
 
-      // ── Confirmation candle: require signal to persist for 2 consecutive ticks ──
-      const pending = pendingSignals[sym];
-      if (!pending || pending.direction !== sig.direction) {
-        // First tick with this signal — store it and wait for confirmation
-        pendingSignals[sym] = {
-          direction: sig.direction,
-          score: sig.score,
-          reasons: sig.reasons,
-          activeSignals: sig.activeSignals,
-          sentimentScore: sig.sentimentScore,
-          confirmedAt: Date.now(),
-        };
-        logEntryBlocked(sym, 'awaiting_confirmation_candle', {
-          direction: sig.direction,
-          score: sig.score,
-          regime: effectiveReq.regime,
-        });
-        continue;
-      }
-      // Signal confirmed on second tick — clear pending and proceed to entry
-      delete pendingSignals[sym];
       if (higherTf.bias !== 'neutral' && sig.direction && higherTf.bias !== sig.direction) {
         logEntryBlocked(sym, 'higher_timeframe_mismatch', {
           direction: sig.direction,

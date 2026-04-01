@@ -30,17 +30,17 @@ const INSTRUMENTS = {
 const SYMBOLS = Object.keys(INSTRUMENTS);
 
 // ─── Default trading parameters ──────────────────────────────────────────────
-// Tuned for a ~$100 live account with conservative risk management.
+// Tuned for active trading on a ~$100 live account.
 const DEFAULT_PARAMS = {
   riskPercent: 1.5,           // risk 1.5% per trade ($1.50 on $100)
   atrMultiplier: 2.5,        // stop loss at 2.5× ATR
-  minScore: 4,               // require strong signal consensus
-  momentumThreshold: 0.0035,  // 0.35% minimum momentum
-  rsiBuyLevel: 28,
-  rsiSellLevel: 72,
-  cooldownCandles: 15,        // 30 seconds between trades per symbol
-  minHoldCandles: 8,          // hold at least 16 seconds (avoid whipsaws)
-  maxPositions: 3,            // max 3 concurrent positions on $100 account
+  minScore: 3,               // lower threshold = more trades
+  momentumThreshold: 0.003,   // 0.3% minimum momentum (lower = more triggers)
+  rsiBuyLevel: 30,            // slightly wider RSI range
+  rsiSellLevel: 70,
+  cooldownCandles: 8,         // 16 seconds between trades per symbol (fast re-entry)
+  minHoldCandles: 5,          // hold at least 10 seconds
+  maxPositions: 4,            // 4 concurrent positions for constant action
 };
 
 // ─── Risk constants ──────────────────────────────────────────────────────────
