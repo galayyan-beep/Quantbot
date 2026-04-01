@@ -756,18 +756,25 @@ async function tradingLoop(state, candleHistory) {
 }
 
 async function main() {
-  logger.info('MAIN', 'Quantbot upgrade runtime booting');
-  await pingInternet();
-  await probeCapitalHosts();
+  logger.info('MAIN', 'Quantbot v2 booting — Gold, BTC, US500');
+
+  // Network checks — non-fatal
+  try { await pingInternet(); } catch (e) { logger.warn('MAIN', 'Internet check failed', { error: e.message }); }
+  try { await probeCapitalHosts(); } catch (e) { logger.warn('MAIN', 'Host probe failed', { error: e.message }); }
 
   const state = loadState();
   state.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
-  // Only disable paper trading if LIVE_TRADING is explicitly enabled
   if (state.LIVE_TRADING) state.PAPER_TRADING = false;
-  // Safety bounds for live trading
   if ((state.params.riskPercent || 0) > 2) state.params.riskPercent = 2;
   if ((state.params.atrMultiplier || 0) < 2.5) state.params.atrMultiplier = 2.5;
   if ((state.params.minScore || 0) < 1) state.params.minScore = 1;
+
+  logger.info('MAIN', 'State loaded', {
+    capital: state.capital,
+    liveTrading: state.LIVE_TRADING,
+    paperTrading: state.PAPER_TRADING,
+    params: state.params,
+  });
 
   const candleHistory = logger.readJSON('candles.json', Object.fromEntries(prices.getSymbols().map(s => [s, []])));
   const savedTrades = logger.readJSON('trades.json', []);
@@ -781,12 +788,37 @@ async function main() {
   }
 
   const useDemoApi = state.PAPER_TRADING || !state.LIVE_TRADING;
+  logger.info('MAIN', 'API mode', { useDemoApi, liveTrading: state.LIVE_TRADING, paperTrading: state.PAPER_TRADING });
   prices.init(savedPrices, { paperTrading: useDemoApi });
+
+  // Auth with Capital.com — retry up to 3 times
   const broker = prices.getBroker();
-  if (broker && typeof broker.auth === 'function') {
-    await broker.auth();
+  let authOk = false;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      if (broker && typeof broker.auth === 'function') {
+        authOk = await broker.auth();
+        if (authOk) {
+          logger.info('MAIN', 'Capital.com auth SUCCESS', { attempt });
+          break;
+        }
+      }
+    } catch (e) {
+      logger.error('MAIN', `Capital.com auth FAILED (attempt ${attempt}/3)`, { error: e.message });
+      if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
+    }
   }
-  await hydrateStartupHistory(candleHistory);
+  if (!authOk) {
+    logger.error('MAIN', 'CRITICAL: Cannot connect to Capital.com after 3 attempts. Check your API keys.');
+    logger.error('MAIN', 'Required env vars: CAPITAL_API_KEY, CAPITAL_API_SECRET, CAPITAL_IDENTIFIER');
+    // Still persist state so we can debug
+    persistState(state, candleHistory);
+    process.exit(1);
+  }
+
+  // Hydrate history — non-fatal
+  try { await hydrateStartupHistory(candleHistory); }
+  catch (e) { logger.warn('MAIN', 'History hydration failed', { error: e.message }); }
 
   executor.init(state, savedTrades);
   state._executor = executor;  // Allow optimizer L5 to close positions on drawdown
