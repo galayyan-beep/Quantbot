@@ -1,124 +1,51 @@
 {
-  "capital": 9999.402935370535,
-  "peakCapital": 10000,
+  "capital": 99.68,
+  "peakCapital": 99.68,
   "openPositions": {},
   "params": {
-    "riskPercent": 3,
+    "riskPercent": 1.5,
     "atrMultiplier": 2.5,
-    "minScore": 3,
-    "momentumThreshold": 0.003,
+    "minScore": 4,
+    "momentumThreshold": 0.0035,
     "rsiBuyLevel": 28,
     "rsiSellLevel": 72,
-    "cooldownCandles": 10,
-    "minHoldCandles": 5,
-    "maxPositions": 5
+    "cooldownCandles": 15,
+    "minHoldCandles": 8,
+    "maxPositions": 3
   },
   "mode": "normal",
   "observationUntil": null,
-  "cooldowns": {
-    "SOL": 1774192368002,
-    "BNB": 1774193696335,
-    "ETH": 1774193652341,
-    "BTC": 1774197197521
-  },
-  "recentLossBySymbol": {
-    "SOL": 3,
-    "BNB": 3,
-    "ETH": 3,
-    "BTC": 3
-  },
-  "winRateBuffer": [
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false
-  ],
+  "cooldowns": {},
+  "recentLossBySymbol": {},
+  "winRateBuffer": [],
   "tradeCount": 0,
   "lastMemoryReviewAt": 0,
   "instruments": {
-    "BTC": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "ETH": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "SOL": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "BNB": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "EURUSD": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "GBPUSD": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "USDJPY": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "AUDUSD": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "GOLD": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "SILVER": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "OIL": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "SPX": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "NQ": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    },
-    "DAX": {
-      "enabled": true,
-      "sizeMultiplier": 1
-    }
+    "BTC": { "enabled": true, "sizeMultiplier": 1 },
+    "ETH": { "enabled": true, "sizeMultiplier": 1 },
+    "SOL": { "enabled": true, "sizeMultiplier": 1 },
+    "BNB": { "enabled": true, "sizeMultiplier": 1 },
+    "EURUSD": { "enabled": true, "sizeMultiplier": 1 },
+    "GBPUSD": { "enabled": true, "sizeMultiplier": 1 },
+    "USDJPY": { "enabled": true, "sizeMultiplier": 1 },
+    "AUDUSD": { "enabled": true, "sizeMultiplier": 1 },
+    "GOLD": { "enabled": true, "sizeMultiplier": 1 },
+    "SILVER": { "enabled": true, "sizeMultiplier": 1 },
+    "OIL": { "enabled": true, "sizeMultiplier": 1 },
+    "SPX": { "enabled": true, "sizeMultiplier": 1 },
+    "NQ": { "enabled": true, "sizeMultiplier": 1 },
+    "DAX": { "enabled": true, "sizeMultiplier": 1 }
   },
   "PAPER_TRADING": false,
-  "paperTradingStartTime": 1774189098388,
+  "paperTradingStartTime": 0,
   "lastPaperHourSummaryAt": 0,
   "lastPaperVerdictAt": 0,
-  "lastDailyReportAt": 1774189183479,
-  "LIVE_TRADING": false,
-  "backtestSummary": {
-    "sharpeRatio": 0,
-    "maxDrawdown": 1
-  },
-  "sentimentSummary": {
-    "updatedAt": 1774214099535,
-    "meanScore": 0
-  },
-  "correlationSummary": {
-    "updatedAt": 1774212389683,
-    "openRisk": 0
-  },
+  "lastDailyReportAt": 0,
+  "LIVE_TRADING": true,
+  "backtestSummary": {},
+  "sentimentSummary": {},
+  "correlationSummary": {},
   "setupCooldowns": {},
-  "setupStopoutCounts": {}
+  "setupStopoutCounts": {},
+  "pfWindowTrades": []
 }

@@ -175,6 +175,13 @@ function calculateAll(candles, sessionStartIdx = 0) {
   // ── Previous close (for VWAP cross detection) ──────────────────────────────
   const prevClose = candles.length >= 2 ? candles[candles.length - 2].close : null;
 
+  // ── Volume stats for signal strength filtering ──────────────────────────
+  const volumes = candles.map(c => c.volume || 0);
+  const recentVol = volumes.slice(-1)[0] || 0;
+  const avgVol = volumes.length >= 10
+    ? volumes.slice(-10).reduce((a, b) => a + b, 0) / 10
+    : recentVol || 1;
+
   return {
     ema3, ema8, ema21, ema50,
     prevEma3, prevEma8,
@@ -186,6 +193,8 @@ function calculateAll(candles, sessionStartIdx = 0) {
     momentum3: mom3,
     prevClose,
     close: closes[closes.length - 1],
+    volume: recentVol,
+    avgVolume: avgVol,
   };
 }
 

@@ -8,36 +8,39 @@
  */
 
 // ─── Instrument definitions ──────────────────────────────────────────────────
+// peakHoursUTC: [start, end] — only open NEW positions during peak liquidity.
+// Crypto trades 24/7 but prefers US+Asia overlap.
 const INSTRUMENTS = {
-  BTC:    { category: 'crypto',    spread: 0.0002 },
-  ETH:    { category: 'crypto',    spread: 0.0003 },
-  SOL:    { category: 'crypto',    spread: 0.0005 },
-  BNB:    { category: 'crypto',    spread: 0.0004 },
-  EURUSD: { category: 'forex',     spread: 0.0001 },
-  GBPUSD: { category: 'forex',     spread: 0.0001 },
-  USDJPY: { category: 'forex',     spread: 0.0001 },
-  AUDUSD: { category: 'forex',     spread: 0.0001 },
-  GOLD:   { category: 'commodity', spread: 0.0003 },
-  SILVER: { category: 'commodity', spread: 0.0004 },
-  OIL:    { category: 'commodity', spread: 0.0005 },
-  SPX:    { category: 'index',     spread: 0.0002 },
-  NQ:     { category: 'index',     spread: 0.0002 },
-  DAX:    { category: 'index',     spread: 0.0002 },
+  BTC:    { category: 'crypto',    spread: 0.0002, peakHoursUTC: [0, 23] },
+  ETH:    { category: 'crypto',    spread: 0.0003, peakHoursUTC: [0, 23] },
+  SOL:    { category: 'crypto',    spread: 0.0005, peakHoursUTC: [0, 23] },
+  BNB:    { category: 'crypto',    spread: 0.0004, peakHoursUTC: [0, 23] },
+  EURUSD: { category: 'forex',     spread: 0.0001, peakHoursUTC: [7, 16] },  // London + NY overlap
+  GBPUSD: { category: 'forex',     spread: 0.0001, peakHoursUTC: [7, 16] },
+  USDJPY: { category: 'forex',     spread: 0.0001, peakHoursUTC: [0, 16] },  // Tokyo + London
+  AUDUSD: { category: 'forex',     spread: 0.0001, peakHoursUTC: [0, 8] },   // Sydney + Tokyo
+  GOLD:   { category: 'commodity', spread: 0.0003, peakHoursUTC: [7, 17] },  // London + NY
+  SILVER: { category: 'commodity', spread: 0.0004, peakHoursUTC: [7, 17] },
+  OIL:    { category: 'commodity', spread: 0.0005, peakHoursUTC: [13, 20] }, // NY session
+  SPX:    { category: 'index',     spread: 0.0002, peakHoursUTC: [13, 20] }, // US market hours
+  NQ:     { category: 'index',     spread: 0.0002, peakHoursUTC: [13, 20] },
+  DAX:    { category: 'index',     spread: 0.0002, peakHoursUTC: [7, 16] },  // European hours
 };
 
 const SYMBOLS = Object.keys(INSTRUMENTS);
 
 // ─── Default trading parameters ──────────────────────────────────────────────
+// Tuned for a ~$100 live account with conservative risk management.
 const DEFAULT_PARAMS = {
-  riskPercent: 2,
-  atrMultiplier: 2.5,
-  minScore: 4,
-  momentumThreshold: 0.0035,
+  riskPercent: 1.5,           // risk 1.5% per trade ($1.50 on $100)
+  atrMultiplier: 2.5,        // stop loss at 2.5× ATR
+  minScore: 4,               // require strong signal consensus
+  momentumThreshold: 0.0035,  // 0.35% minimum momentum
   rsiBuyLevel: 28,
   rsiSellLevel: 72,
-  cooldownCandles: 12,
-  minHoldCandles: 6,
-  maxPositions: 5,
+  cooldownCandles: 15,        // 30 seconds between trades per symbol
+  minHoldCandles: 8,          // hold at least 16 seconds (avoid whipsaws)
+  maxPositions: 3,            // max 3 concurrent positions on $100 account
 };
 
 // ─── Risk constants ──────────────────────────────────────────────────────────
@@ -49,7 +52,7 @@ const MAX_CRYPTO_BASKET_EXPOSURE = 70;
 const TICK_INTERVAL_MS = 2000;
 const MAX_CANDLE_HIST = 220;
 const WARMUP_CANDLES = 55;
-const INITIAL_CAPITAL = 10000;
+const INITIAL_CAPITAL = 100;  // $100 live account
 
 // ─── Correlation groups ──────────────────────────────────────────────────────
 const CORRELATION_GROUPS = [
@@ -58,6 +61,16 @@ const CORRELATION_GROUPS = [
   new Set(['GOLD', 'SILVER']),
   new Set(['SPX', 'NQ', 'DAX']),
 ];
+
+// ─── Peak hours check ────────────────────────────────────────────────────────
+function isInPeakHours(symbol) {
+  const info = INSTRUMENTS[symbol];
+  if (!info || !info.peakHoursUTC) return true; // no restriction
+  const [start, end] = info.peakHoursUTC;
+  const hour = new Date().getUTCHours();
+  if (start <= end) return hour >= start && hour <= end;
+  return hour >= start || hour <= end; // wraps around midnight
+}
 
 module.exports = {
   INSTRUMENTS,
@@ -71,4 +84,5 @@ module.exports = {
   WARMUP_CANDLES,
   INITIAL_CAPITAL,
   CORRELATION_GROUPS,
+  isInPeakHours,
 };

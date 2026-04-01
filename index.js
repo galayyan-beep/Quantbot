@@ -21,6 +21,7 @@ const {
   WARMUP_CANDLES,
   TICK_INTERVAL_MS,
   DEFAULT_PARAMS,
+  isInPeakHours,
 } = require('./config');
 
 const sessionStartIdx = {};
@@ -180,9 +181,10 @@ function loadState() {
     if (saved.capital === undefined) saved.capital = INITIAL_CAPITAL;
     if (saved.peakCapital === undefined) saved.peakCapital = saved.capital;
     saved.params = { ...DEFAULT_PARAMS, ...(saved.params || {}) };
+    // Safety bounds: prevent optimizer from going too aggressive
     if ((saved.params.atrMultiplier || 0) < 2.5) saved.params.atrMultiplier = 2.5;
-    if ((saved.params.riskPercent || 0) > 3) saved.params.riskPercent = 3;
-    if ((saved.params.minScore || 0) !== 3) saved.params.minScore = 3;
+    if ((saved.params.riskPercent || 0) > 2) saved.params.riskPercent = 2;
+    if ((saved.params.minScore || 0) < 3) saved.params.minScore = 3;
     saved.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
     if (!saved.instruments) {
       saved.instruments = Object.fromEntries(prices.getSymbols().map(s => [s, { enabled: true, sizeMultiplier: 1.0 }]));
@@ -652,6 +654,12 @@ async function tradingLoop(state, candleHistory) {
         continue;
       }
 
+      // Only trade during peak liquidity hours for each instrument
+      if (!isInPeakHours(sym)) {
+        logEntryBlocked(sym, 'outside_peak_hours');
+        continue;
+      }
+
       let marketStatus = prices.getCachedMarketStatus(sym);
       if (!marketStatus) {
         try {
@@ -907,9 +915,10 @@ async function main() {
   state.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
   // Only disable paper trading if LIVE_TRADING is explicitly enabled
   if (state.LIVE_TRADING) state.PAPER_TRADING = false;
-  if ((state.params.riskPercent || 0) > 3) state.params.riskPercent = 3;
+  // Safety bounds for live trading
+  if ((state.params.riskPercent || 0) > 2) state.params.riskPercent = 2;
   if ((state.params.atrMultiplier || 0) < 2.5) state.params.atrMultiplier = 2.5;
-  state.params.minScore = 3;
+  if ((state.params.minScore || 0) < 3) state.params.minScore = 3;
 
   const candleHistory = logger.readJSON('candles.json', Object.fromEntries(prices.getSymbols().map(s => [s, []])));
   const savedTrades = logger.readJSON('trades.json', []);

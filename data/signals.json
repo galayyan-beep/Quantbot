@@ -1,23 +1,15 @@
 {
   "weights": {
-    "emaCross": 2,
+    "emaCross": 2.5,
     "vwapReclaim": 2,
-    "momentumSurge": 2,
+    "momentumSurge": 2.5,
     "lowerBBWithRsi": 2,
-    "macdCross": 1,
+    "macdCross": 1.5,
     "rsiBounce": 1,
-    "bbSqueezeBreakout": 1,
-    "trendContinuation": 2,
+    "bbSqueezeBreakout": 1.5,
+    "trendContinuation": 3,
     "cryptoBreakout": 2
   },
   "disabledSignals": {},
-  "consecutiveLosses": {
-    "emaCross": 4,
-    "upperBBWithRsi": 2,
-    "bbSqueezeBreakout": 0,
-    "macdCross": 1,
-    "rsiBounce": 2,
-    "vwapReclaim": 4,
-    "lowerBBWithRsi": 1
-  }
+  "consecutiveLosses": {}
 }

@@ -182,20 +182,21 @@ async function layer1Fast(trades) {
   logger.optim('L1', 'Running fast parameter review', stats);
 
   const PARAM_BOUNDS = {
-    riskPercent:        [1,    3],
-    atrMultiplier:      [2.5,  3],
-    minScore:           [4,    5],
-    momentumThreshold:  [0.002, 0.009],
+    riskPercent:        [0.5,  2],     // conservative for $100 account
+    atrMultiplier:      [2.5,  3.5],
+    minScore:           [3,    5],
+    momentumThreshold:  [0.002, 0.008],
     rsiBuyLevel:        [20,  35],
     rsiSellLevel:       [65,  80],
-    cooldownCandles:    [8,   20],
-    minHoldCandles:     [5,   12],
+    cooldownCandles:    [10,  25],
+    minHoldCandles:     [6,   15],
   };
 
-  const systemPrompt = `You are a quantitative trading analyst evaluating a paper trading bot's performance.
+  const systemPrompt = `You are a quantitative trading analyst evaluating a live trading bot on a $100 CFD account.
 Analyze the performance data and return ONLY a JSON object with adjusted parameters and a one-sentence reason for each change.
+IMPORTANT: Be conservative — this is real money. Prioritize capital preservation over aggressive growth.
 Allowed parameter ranges: ${JSON.stringify(PARAM_BOUNDS)}.
-Format: { "riskPercent": { "value": 4.5, "reason": "..." }, "atrMultiplier": { "value": 1.8, "reason": "..." }, ... }
+Format: { "riskPercent": { "value": 1.5, "reason": "..." }, "atrMultiplier": { "value": 2.5, "reason": "..." }, ... }
 Only include parameters you want to change. Return minimal JSON with no extra text.`;
 
   const userContent = `Performance data (last 20 trades): ${JSON.stringify(stats)}
@@ -359,11 +360,11 @@ Correlation risk: ${JSON.stringify(_state.correlationSummary || {})}`;
     suggestion: insightEntry.structuralImprovement,
   });
 
-  // Apply any parameter suggestions
+  // Apply any parameter suggestions (conservative for live $100 account)
   const PARAM_BOUNDS = {
-    riskPercent: [1, 3], atrMultiplier: [2.5, 3], minScore: [3, 3],
-    momentumThreshold: [0.001, 0.008], rsiBuyLevel: [20, 35],
-    rsiSellLevel: [65, 80], cooldownCandles: [5, 20], minHoldCandles: [3, 10],
+    riskPercent: [0.5, 2], atrMultiplier: [2.5, 3.5], minScore: [3, 5],
+    momentumThreshold: [0.002, 0.008], rsiBuyLevel: [20, 35],
+    rsiSellLevel: [65, 80], cooldownCandles: [10, 25], minHoldCandles: [6, 15],
   };
 
   for (const [key, upd] of Object.entries(result.parameterSuggestions || {})) {
@@ -543,8 +544,8 @@ async function layer5SelfHeal(trades, drawdown, profitFactorWindow) {
     return { action: 'emergency_reset' };
   }
 
-  // Keep minScore pinned to 3 to preserve desired trade frequency profile.
-  if (_state.params.minScore !== 3) {
+  // Keep minScore within safe bounds (never allow it below 3)
+  if (_state.params.minScore < 3) {
     _state.params.minScore = 3;
   }
 
@@ -573,10 +574,11 @@ Return ONLY JSON with new parameter values and brief reasons:
   const userContent  = `Emergency state: ${JSON.stringify(stats)}\nCurrent params: ${JSON.stringify(_state.params)}`;
   const result       = await callClaude(systemPrompt, userContent, 1024);
 
+  // Ultra-conservative defaults for emergency recovery
   const defaults = {
-    riskPercent: 2.5, atrMultiplier: 2.5, minScore: 3,
-    momentumThreshold: 0.003, rsiBuyLevel: 28, rsiSellLevel: 72,
-    cooldownCandles: 15, minHoldCandles: 7,
+    riskPercent: 1, atrMultiplier: 3, minScore: 5,
+    momentumThreshold: 0.004, rsiBuyLevel: 25, rsiSellLevel: 75,
+    cooldownCandles: 20, minHoldCandles: 10,
   };
 
   const resetInsight = {
@@ -588,9 +590,9 @@ Return ONLY JSON with new parameter values and brief reasons:
   };
 
   const PARAM_BOUNDS = {
-    riskPercent: [1, 3], atrMultiplier: [2.5, 3], minScore: [3, 3],
-    momentumThreshold: [0.001, 0.006], rsiBuyLevel: [22, 35],
-    rsiSellLevel: [65, 78], cooldownCandles: [10, 20], minHoldCandles: [5, 10],
+    riskPercent: [0.5, 1.5], atrMultiplier: [2.5, 3.5], minScore: [4, 6],
+    momentumThreshold: [0.003, 0.008], rsiBuyLevel: [22, 30],
+    rsiSellLevel: [70, 78], cooldownCandles: [15, 25], minHoldCandles: [8, 15],
   };
 
   for (const [key, def] of Object.entries(defaults)) {
@@ -607,8 +609,8 @@ Return ONLY JSON with new parameter values and brief reasons:
     resetInsight.appliedParams[key] = val;
   }
 
-  // Resume with half the risk
-  _state.params.riskPercent = Math.min(_state.params.riskPercent, 2.5);
+  // Resume with minimal risk after emergency
+  _state.params.riskPercent = Math.min(_state.params.riskPercent, 1);
   _state.mode = 'normal';
   _state.peakCapital = _state.capital;  // reset drawdown reference
 
