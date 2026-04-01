@@ -566,7 +566,13 @@ async function finalizePaperCycleIfNeeded(state, trades) {
 }
 
 async function tradingLoop(state, candleHistory) {
-  const newCandles = await prices.tick();
+  let newCandles;
+  if (state._useSimulator) {
+    const simulator = require('./simulator');
+    newCandles = simulator.fetchBatch(prices.getSymbols());
+  } else {
+    newCandles = await prices.tick();
+  }
 
   for (const sym of prices.getSymbols()) {
     const candle = newCandles[sym];
@@ -799,34 +805,53 @@ async function main() {
   logger.info('MAIN', 'API mode', { useDemoApi, liveTrading: state.LIVE_TRADING, paperTrading: state.PAPER_TRADING });
   prices.init(savedPrices, { paperTrading: useDemoApi });
 
-  // Auth with Capital.com — retry up to 3 times
+  // Try to connect to Capital.com for REAL market data (even in paper mode)
   const broker = prices.getBroker();
   let authOk = false;
+  let useSimulator = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       if (broker && typeof broker.auth === 'function') {
         authOk = await broker.auth();
         if (authOk) {
-          logger.info('MAIN', 'Capital.com auth SUCCESS', { attempt });
+          logger.info('MAIN', 'Capital.com auth SUCCESS — using real market data', { attempt });
           break;
         }
       }
     } catch (e) {
-      logger.error('MAIN', `Capital.com auth FAILED (attempt ${attempt}/3)`, { error: e.message });
+      logger.warn('MAIN', `Capital.com auth attempt ${attempt}/3 failed`, { error: e.message });
       if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
     }
   }
   if (!authOk) {
-    logger.error('MAIN', 'CRITICAL: Cannot connect to Capital.com after 3 attempts. Check your API keys.');
-    logger.error('MAIN', 'Required env vars: CAPITAL_API_KEY, CAPITAL_API_SECRET, CAPITAL_IDENTIFIER');
-    // Still persist state so we can debug
-    persistState(state, candleHistory);
-    process.exit(1);
+    if (state.PAPER_TRADING) {
+      // Paper mode: fall back to simulated prices if Capital.com unavailable
+      useSimulator = true;
+      logger.warn('MAIN', 'Capital.com unavailable — falling back to simulated prices for paper trading');
+    } else {
+      logger.error('MAIN', 'CRITICAL: Cannot connect to Capital.com for live trading');
+      persistState(state, candleHistory);
+      process.exit(1);
+    }
   }
 
-  // Hydrate history — non-fatal
-  try { await hydrateStartupHistory(candleHistory); }
-  catch (e) { logger.warn('MAIN', 'History hydration failed', { error: e.message }); }
+  // Hydrate history
+  if (!useSimulator) {
+    try { await hydrateStartupHistory(candleHistory); }
+    catch (e) { logger.warn('MAIN', 'History hydration failed', { error: e.message }); }
+  } else {
+    // Use simulator to generate warmup history
+    const simulator = require('./simulator');
+    for (const sym of prices.getSymbols()) {
+      if (!candleHistory[sym] || candleHistory[sym].length < WARMUP_CANDLES) {
+        candleHistory[sym] = simulator.generateHistory(sym, WARMUP_CANDLES + 10);
+      }
+    }
+    logger.info('MAIN', 'Simulated history generated for warmup');
+  }
+
+  // Store simulator flag so trading loop knows which price source to use
+  state._useSimulator = useSimulator;
 
   executor.init(state, savedTrades);
   state._executor = executor;  // Allow optimizer L5 to close positions on drawdown
