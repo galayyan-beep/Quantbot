@@ -92,24 +92,24 @@ function score(ind, params, symbol = null) {
   // PILLAR 2: MOMENTUM — RSI Confirmation
   // ═══════════════════════════════════════════════════════════════════════════
   if (rsi7 !== null) {
-    // For longs: RSI should be rising and NOT overbought (< 70)
-    if (rsi7 > 40 && rsi7 < 70) {
+    // For longs: RSI not overbought
+    if (rsi7 < 75) {
       longScore += 1;
       reasons.push('rsiLong:+1');
     }
-    // For shorts: RSI should be falling and NOT oversold (> 30)
-    if (rsi7 < 60 && rsi7 > 30) {
+    // For shorts: RSI not oversold
+    if (rsi7 > 25) {
       shortScore += 1;
       reasons.push('rsiShort:+1');
     }
-    // Strong RSI extremes — extra conviction
-    if (rsi7 < 25) {
-      longScore += 0.5;  // oversold bounce
-      reasons.push('rsiOversold:+0.5');
+    // RSI extremes — strong conviction for reversals
+    if (rsi7 < 30) {
+      longScore += 1;
+      reasons.push('rsiOversold:+1');
     }
-    if (rsi7 > 75) {
-      shortScore += 0.5; // overbought reversal
-      reasons.push('rsiOverbought:+0.5');
+    if (rsi7 > 70) {
+      shortScore += 1;
+      reasons.push('rsiOverbought:+1');
     }
   }
 

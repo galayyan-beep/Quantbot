@@ -71,7 +71,7 @@ function effectiveEntryRequirements(symbol, entryReq, higherTf, signal) {
   let minScore = entryReq.minScore;
   let minActiveSignals = entryReq.minActiveSignals;
   if (entryReq.weekendMode && category === 'crypto' && signal?.direction && higherTf?.bias === signal.direction) {
-    minScore = Math.max(2, minScore - 1);
+    minScore = Math.max(1, minScore - 1);
     minActiveSignals = Math.max(1, minActiveSignals - 1);
   }
   return {
@@ -132,7 +132,7 @@ function adaptiveEntryRequirements(symbol, ind, params) {
   let minActiveSignals = 2;
 
   if (regime === 'trending') {
-    minScore = Math.max(2, baseMinScore - 1);
+    minScore = Math.max(1, baseMinScore - 1);
     minActiveSignals = 1;   // single strong signal OK in trends
   } else if (regime === 'choppy') {
     minScore = baseMinScore + 1;
@@ -143,7 +143,7 @@ function adaptiveEntryRequirements(symbol, ind, params) {
 
   if (weekendMode && category === 'crypto') {
     if (regime === 'choppy') {
-      minScore = Math.max(3, baseMinScore);
+      minScore = Math.max(1, baseMinScore);
       minActiveSignals = 2;
     }
   }
@@ -188,7 +188,7 @@ function loadState() {
     // Safety bounds: prevent optimizer from going too aggressive
     if ((saved.params.atrMultiplier || 0) < 2.5) saved.params.atrMultiplier = 2.5;
     if ((saved.params.riskPercent || 0) > 2) saved.params.riskPercent = 2;
-    if ((saved.params.minScore || 0) < 2) saved.params.minScore = 2;
+    if ((saved.params.minScore || 0) < 1) saved.params.minScore = 1;
     saved.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
     if (!saved.instruments) {
       saved.instruments = Object.fromEntries(prices.getSymbols().map(s => [s, { enabled: true, sizeMultiplier: 1.0 }]));
@@ -667,7 +667,7 @@ async function tradingLoop(state, candleHistory) {
 
       // ── Score the signal ───────────────────────────────────────────────
       const sig = signalsMod.score(ind, state.params, sym);
-      if (!sig.direction || sig.score < (state.params.minScore || 2)) continue;
+      if (!sig.direction || sig.score < (state.params.minScore || 1)) continue;
 
       // ── Drawdown check (only essential safety) ─────────────────────────
       const dd = risk.calcDrawdown(state.capital, state.peakCapital);
@@ -767,7 +767,7 @@ async function main() {
   // Safety bounds for live trading
   if ((state.params.riskPercent || 0) > 2) state.params.riskPercent = 2;
   if ((state.params.atrMultiplier || 0) < 2.5) state.params.atrMultiplier = 2.5;
-  if ((state.params.minScore || 0) < 2) state.params.minScore = 2;
+  if ((state.params.minScore || 0) < 1) state.params.minScore = 1;
 
   const candleHistory = logger.readJSON('candles.json', Object.fromEntries(prices.getSymbols().map(s => [s, []])));
   const savedTrades = logger.readJSON('trades.json', []);
