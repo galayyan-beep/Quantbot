@@ -39,8 +39,8 @@ const FOCUS_SYMBOLS = ['GOLD', 'BTC', 'SPX'];
 const DEFAULT_PARAMS = {
   riskPercent: 1.5,           // risk 1.5% per trade ($1.50 on $100)
   atrMultiplier: 2.5,        // stop loss at 2.5× ATR
-  minScore: 2,               // low threshold = trades fast
-  momentumThreshold: 0.002,   // 0.2% momentum (very sensitive)
+  minScore: 1,               // single pillar = trade
+  momentumThreshold: 0.001,   // 0.1% momentum (ultra sensitive)
   rsiBuyLevel: 32,
   rsiSellLevel: 68,
   cooldownCandles: 5,         // 10 seconds between trades per symbol
@@ -56,7 +56,7 @@ const MAX_CRYPTO_BASKET_EXPOSURE = 70;
 // ─── Timing constants ────────────────────────────────────────────────────────
 const TICK_INTERVAL_MS = 2000;
 const MAX_CANDLE_HIST = 220;
-const WARMUP_CANDLES = 55;
+const WARMUP_CANDLES = 25;  // faster startup — trade sooner
 const INITIAL_CAPITAL = 100;  // $100 live account
 
 // ─── Correlation groups ──────────────────────────────────────────────────────
