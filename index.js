@@ -15,24 +15,22 @@ const correlation = require('./correlation');
 const { runBacktest } = require('./backtest');
 const { pingInternet, probeCapitalHosts } = require('./capitalApi');
 
-const INITIAL_CAPITAL = 10000;
-const MAX_CANDLE_HIST = 220;
-const WARMUP_CANDLES = 55;
-const TICK_INTERVAL_MS = 2000;
-const DEFAULT_PARAMS = {
-  riskPercent: 2,
-  atrMultiplier: 2.5,
-  minScore: 4,
-  momentumThreshold: 0.0035,
-  rsiBuyLevel: 28,
-  rsiSellLevel: 72,
-  cooldownCandles: 12,
-  minHoldCandles: 6,
-  maxPositions: 5,
-};
+const {
+  INITIAL_CAPITAL,
+  MAX_CANDLE_HIST,
+  WARMUP_CANDLES,
+  TICK_INTERVAL_MS,
+  DEFAULT_PARAMS,
+  isInPeakHours,
+} = require('./config');
 
 const sessionStartIdx = {};
 let lastDashboardSnapshotAt = 0;
+
+// ─── Confirmation candle tracking ────────────────────────────────────────────
+// Stores pending signals that need a second candle of confirmation before entry.
+// { symbol: { direction, score, reasons, activeSignals, tick, sentimentScore } }
+const pendingSignals = {};
 
 function isWeekendUtc(timestamp = Date.now()) {
   const day = new Date(timestamp).getUTCDay();
@@ -133,10 +131,12 @@ function adaptiveEntryRequirements(symbol, ind, params) {
 
   if (regime === 'trending') {
     minScore = Math.max(2, baseMinScore - 1);
-    minActiveSignals = 1;
+    minActiveSignals = 1;   // single strong signal OK in trends
   } else if (regime === 'choppy') {
-    minScore = Math.min(4, baseMinScore + 1);
+    minScore = baseMinScore + 1;
     minActiveSignals = 2;
+  } else {
+    minActiveSignals = 2;   // normal: need 2 signals agreeing
   }
 
   if (weekendMode && category === 'crypto') {
@@ -176,16 +176,17 @@ function ensureDailyReportDir() {
 function loadState() {
   const saved = logger.readJSON('state.json', null);
   if (saved) {
-    // Live-first runtime: disable mandatory paper gate unless user explicitly re-enables it.
-    saved.PAPER_TRADING = false;
+    // Respect saved paper trading state — only override via LIVE_TRADING env var.
+    if (saved.PAPER_TRADING === undefined) saved.PAPER_TRADING = true;
     if (!saved.paperTradingStartTime) saved.paperTradingStartTime = Date.now();
     if (!saved.lastDailyReportAt) saved.lastDailyReportAt = 0;
     if (saved.capital === undefined) saved.capital = INITIAL_CAPITAL;
     if (saved.peakCapital === undefined) saved.peakCapital = saved.capital;
     saved.params = { ...DEFAULT_PARAMS, ...(saved.params || {}) };
+    // Safety bounds: prevent optimizer from going too aggressive
     if ((saved.params.atrMultiplier || 0) < 2.5) saved.params.atrMultiplier = 2.5;
-    if ((saved.params.riskPercent || 0) > 3) saved.params.riskPercent = 3;
-    if ((saved.params.minScore || 0) !== 3) saved.params.minScore = 3;
+    if ((saved.params.riskPercent || 0) > 2) saved.params.riskPercent = 2;
+    if ((saved.params.minScore || 0) < 3) saved.params.minScore = 3;
     saved.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
     if (!saved.instruments) {
       saved.instruments = Object.fromEntries(prices.getSymbols().map(s => [s, { enabled: true, sizeMultiplier: 1.0 }]));
@@ -210,7 +211,7 @@ function loadState() {
     instruments: Object.fromEntries(prices.getSymbols().map(s => [s, { enabled: true, sizeMultiplier: 1.0 }])),
     profitFactorWindow: null,
     pfWindowTrades: [],
-    PAPER_TRADING: false,
+    PAPER_TRADING: true,
     paperTradingStartTime: Date.now(),
     lastPaperHourSummaryAt: 0,
     lastPaperVerdictAt: 0,
@@ -578,6 +579,25 @@ async function tradingLoop(state, candleHistory) {
     state.winRateBuffer = state.winRateBuffer.slice(-250);
   }
 
+  // ── Stale-state recovery: if no positions are open and all symbols are blocked,
+  //    reset loss counters and expired cooldowns so the bot can trade again.
+  if (Object.keys(state.openPositions).length === 0) {
+    // Clean up expired cooldowns
+    for (const key of Object.keys(state.cooldowns)) {
+      if (state.cooldowns[key] < Date.now()) {
+        delete state.cooldowns[key];
+      }
+    }
+    // Clean up expired loss cooldowns and reset counters
+    for (const sym of prices.getSymbols()) {
+      const lossCooldown = state.cooldowns[sym + '_loss_cooldown'];
+      if (lossCooldown && Date.now() >= lossCooldown) {
+        delete state.cooldowns[sym + '_loss_cooldown'];
+        state.recentLossBySymbol[sym] = 0;
+      }
+    }
+  }
+
   // Cleanup pfWindowTrades to prevent memory leak
   if (state.pfWindowTrades.length > 200) {
     state.pfWindowTrades = state.pfWindowTrades.slice(-100);
@@ -608,9 +628,12 @@ async function tradingLoop(state, candleHistory) {
   }
 
   for (const [sym, pos] of Object.entries(state.openPositions)) {
+    const candle = newCandles[sym];
+    if (!candle) continue;
+    pos.lastPrice = candle.close;  // Track for drawdown force-close decisions
     const ind = indicatorsMap[sym];
     if (!ind || !ind.atr7) continue;
-    const ts = risk.updateTrailingStop(pos, newCandles[sym].close, ind.atr7);
+    const ts = risk.updateTrailingStop(pos, candle.close, ind.atr7);
     if (ts !== null) pos.trailingStop = ts;
   }
 
@@ -630,6 +653,12 @@ async function tradingLoop(state, candleHistory) {
       const ins = state.instruments[sym] || { enabled: true, sizeMultiplier: 1 };
       if (!ins.enabled) {
         logEntryBlocked(sym, 'instrument_disabled');
+        continue;
+      }
+
+      // Only trade during peak liquidity hours for each instrument
+      if (!isInPeakHours(sym)) {
+        logEntryBlocked(sym, 'outside_peak_hours');
         continue;
       }
 
@@ -659,6 +688,7 @@ async function tradingLoop(state, candleHistory) {
       const sig = signalsMod.score(ind, state.params, sym);
       const effectiveReq = effectiveEntryRequirements(sym, entryReq, higherTf, sig);
       if (sig.blockedBySentiment) {
+        delete pendingSignals[sym];
         logEntryBlocked(sym, 'sentiment_contradiction', {
           sentimentScore: sig.sentimentScore,
           direction: sig.direction,
@@ -667,6 +697,7 @@ async function tradingLoop(state, candleHistory) {
         continue;
       }
       if (!sig.direction || sig.score < effectiveReq.minScore || sig.activeSignals < effectiveReq.minActiveSignals) {
+        delete pendingSignals[sym];
         logEntryBlocked(sym, 'signal_threshold_not_met', {
           direction: sig.direction || null,
           score: sig.score,
@@ -677,6 +708,7 @@ async function tradingLoop(state, candleHistory) {
         });
         continue;
       }
+
       if (higherTf.bias !== 'neutral' && sig.direction && higherTf.bias !== sig.direction) {
         logEntryBlocked(sym, 'higher_timeframe_mismatch', {
           direction: sig.direction,
@@ -807,7 +839,7 @@ async function tradingLoop(state, candleHistory) {
 
       const adjustedRiskAmount = Number((size * sizing.stopDistance).toFixed(8));
 
-      executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
+      await executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
       
       // Verify position was created
       if (!state.openPositions[sym]) {
@@ -862,10 +894,12 @@ async function main() {
 
   const state = loadState();
   state.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
-  state.PAPER_TRADING = false;
-  if ((state.params.riskPercent || 0) > 3) state.params.riskPercent = 3;
+  // Only disable paper trading if LIVE_TRADING is explicitly enabled
+  if (state.LIVE_TRADING) state.PAPER_TRADING = false;
+  // Safety bounds for live trading
+  if ((state.params.riskPercent || 0) > 2) state.params.riskPercent = 2;
   if ((state.params.atrMultiplier || 0) < 2.5) state.params.atrMultiplier = 2.5;
-  state.params.minScore = 3;
+  if ((state.params.minScore || 0) < 3) state.params.minScore = 3;
 
   const candleHistory = logger.readJSON('candles.json', Object.fromEntries(prices.getSymbols().map(s => [s, []])));
   const savedTrades = logger.readJSON('trades.json', []);
@@ -887,7 +921,8 @@ async function main() {
   await hydrateStartupHistory(candleHistory);
 
   executor.init(state, savedTrades);
-  
+  state._executor = executor;  // Allow optimizer L5 to close positions on drawdown
+
   // SAFETY CHECK: Detect dual opposite positions at startup
   const openTrades = executor.getTradeLog().filter(t => !t.exitTime);
   const positionsBySymbol = {};
@@ -979,6 +1014,7 @@ async function main() {
           open: Object.keys(state.openPositions).length,
           paperTrading: state.PAPER_TRADING,
           liveTrading: state.LIVE_TRADING,
+          anthropicTokens: optimizer.getTokensUsed(),
         });
       }
     } catch (err) {

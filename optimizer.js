@@ -33,6 +33,9 @@ function getClient() {
 
 // ─── Shared state reference (injected from index.js) ─────────────────────────
 let _state = null;
+let _lastLayer3At = 0;   // Timestamp of last Layer 3 run
+const LAYER1_COOLDOWN_AFTER_L3 = 10 * 60 * 1000;  // 10min cooldown after deep analysis
+let _totalTokensUsed = 0;  // Track Anthropic API usage
 
 function init(sharedState) {
   _state = sharedState;
@@ -51,6 +54,10 @@ async function callClaude(systemPrompt, userContent, maxTokens = 1024) {
       ],
     });
     const text = res.content[0]?.text || '';
+    // Track token usage for cost monitoring
+    const inputTokens = res.usage?.input_tokens || 0;
+    const outputTokens = res.usage?.output_tokens || 0;
+    _totalTokensUsed += inputTokens + outputTokens;
     // Extract first JSON object from response
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) { logger.warn('OPTIM', 'No JSON found in Claude response', { text: text.slice(0, 200) }); return null; }
@@ -163,26 +170,33 @@ function recentTradeHealth(trades, n = 30) {
 async function layer1Fast(trades) {
   if (!trades || trades.length < 10) return;
 
+  // Skip Layer 1 for 10 minutes after Layer 3 runs to prevent thrashing
+  if (_lastLayer3At && Date.now() - _lastLayer3At < LAYER1_COOLDOWN_AFTER_L3) {
+    logger.optim('L1', 'Skipped — cooling down after Layer 3 deep analysis');
+    return;
+  }
+
   const stats = recentTradeStats(trades, 20);
   if (!stats) return;
 
   logger.optim('L1', 'Running fast parameter review', stats);
 
   const PARAM_BOUNDS = {
-    riskPercent:        [1,    3],
-    atrMultiplier:      [2.5,  3],
-    minScore:           [4,    5],
-    momentumThreshold:  [0.002, 0.009],
+    riskPercent:        [0.5,  2],     // conservative for $100 account
+    atrMultiplier:      [2.5,  3.5],
+    minScore:           [3,    5],
+    momentumThreshold:  [0.002, 0.008],
     rsiBuyLevel:        [20,  35],
     rsiSellLevel:       [65,  80],
-    cooldownCandles:    [8,   20],
-    minHoldCandles:     [5,   12],
+    cooldownCandles:    [10,  25],
+    minHoldCandles:     [6,   15],
   };
 
-  const systemPrompt = `You are a quantitative trading analyst evaluating a paper trading bot's performance.
+  const systemPrompt = `You are a quantitative trading analyst evaluating a live trading bot on a $100 CFD account.
 Analyze the performance data and return ONLY a JSON object with adjusted parameters and a one-sentence reason for each change.
+IMPORTANT: Be conservative — this is real money. Prioritize capital preservation over aggressive growth.
 Allowed parameter ranges: ${JSON.stringify(PARAM_BOUNDS)}.
-Format: { "riskPercent": { "value": 4.5, "reason": "..." }, "atrMultiplier": { "value": 1.8, "reason": "..." }, ... }
+Format: { "riskPercent": { "value": 1.5, "reason": "..." }, "atrMultiplier": { "value": 2.5, "reason": "..." }, ... }
 Only include parameters you want to change. Return minimal JSON with no extra text.`;
 
   const userContent = `Performance data (last 20 trades): ${JSON.stringify(stats)}
@@ -298,6 +312,7 @@ async function layer2Medium(trades, instruments) {
 async function layer3Deep(trades, optimizations) {
   if (!trades || trades.length < 30) return;
 
+  _lastLayer3At = Date.now();
   logger.optim('L3', 'Running deep AI strategy review');
 
   // Summarise full history to stay within token limits
@@ -345,11 +360,11 @@ Correlation risk: ${JSON.stringify(_state.correlationSummary || {})}`;
     suggestion: insightEntry.structuralImprovement,
   });
 
-  // Apply any parameter suggestions
+  // Apply any parameter suggestions (conservative for live $100 account)
   const PARAM_BOUNDS = {
-    riskPercent: [1, 3], atrMultiplier: [2.5, 3], minScore: [3, 3],
-    momentumThreshold: [0.001, 0.008], rsiBuyLevel: [20, 35],
-    rsiSellLevel: [65, 80], cooldownCandles: [5, 20], minHoldCandles: [3, 10],
+    riskPercent: [0.5, 2], atrMultiplier: [2.5, 3.5], minScore: [3, 5],
+    momentumThreshold: [0.002, 0.008], rsiBuyLevel: [20, 35],
+    rsiSellLevel: [65, 80], cooldownCandles: [10, 25], minHoldCandles: [6, 15],
   };
 
   for (const [key, upd] of Object.entries(result.parameterSuggestions || {})) {
@@ -491,16 +506,46 @@ async function layer5SelfHeal(trades, drawdown, profitFactorWindow) {
     logger.optim('L5', 'Observation period ended — resuming normal trading');
   }
 
+  // ── Drawdown hits 10% → close all losing positions to limit damage ──────
+  if (drawdown >= 0.10 && _state.openPositions) {
+    const openSymbols = Object.keys(_state.openPositions);
+    for (const sym of openSymbols) {
+      const pos = _state.openPositions[sym];
+      if (!pos) continue;
+      // Calculate unrealized P&L direction
+      const currentPrice = pos.lastPrice || pos.entryPrice;
+      const priceDiff = pos.direction === 'long'
+        ? currentPrice - pos.entryPrice
+        : pos.entryPrice - currentPrice;
+      if (priceDiff < 0) {
+        logger.warn('L5', `Drawdown ≥ 10% — force-closing losing position`, {
+          symbol: sym,
+          direction: pos.direction,
+          drawdown: (drawdown * 100).toFixed(1) + '%',
+        });
+        // Exit will be handled by executor via the shared state reference
+        if (_state._executor) _state._executor.exit(sym, 'drawdown_force_close');
+      }
+    }
+  }
+
   // ── Drawdown hits 12% → full stop, AI strategy reset ─────────────────────
   if (drawdown >= 0.12 && _state.mode !== 'paused') {
+    // Close ALL remaining positions before pausing
+    if (_state.openPositions && _state._executor) {
+      for (const sym of Object.keys(_state.openPositions)) {
+        logger.warn('L5', `HARD STOP: closing all positions`, { symbol: sym });
+        _state._executor.exit(sym, 'emergency_close');
+      }
+    }
     _state.mode = 'paused';
     logger.warn('L5', 'HARD STOP: drawdown ≥ 12% — requesting AI strategy reset');
     await emergencyReset(trades);
     return { action: 'emergency_reset' };
   }
 
-  // Keep minScore pinned to 3 to preserve desired trade frequency profile.
-  if (_state.params.minScore !== 3) {
+  // Keep minScore within safe bounds (never allow it below 3)
+  if (_state.params.minScore < 3) {
     _state.params.minScore = 3;
   }
 
@@ -529,10 +574,11 @@ Return ONLY JSON with new parameter values and brief reasons:
   const userContent  = `Emergency state: ${JSON.stringify(stats)}\nCurrent params: ${JSON.stringify(_state.params)}`;
   const result       = await callClaude(systemPrompt, userContent, 1024);
 
+  // Ultra-conservative defaults for emergency recovery
   const defaults = {
-    riskPercent: 2.5, atrMultiplier: 2.5, minScore: 3,
-    momentumThreshold: 0.003, rsiBuyLevel: 28, rsiSellLevel: 72,
-    cooldownCandles: 15, minHoldCandles: 7,
+    riskPercent: 1, atrMultiplier: 3, minScore: 5,
+    momentumThreshold: 0.004, rsiBuyLevel: 25, rsiSellLevel: 75,
+    cooldownCandles: 20, minHoldCandles: 10,
   };
 
   const resetInsight = {
@@ -544,9 +590,9 @@ Return ONLY JSON with new parameter values and brief reasons:
   };
 
   const PARAM_BOUNDS = {
-    riskPercent: [1, 3], atrMultiplier: [2.5, 3], minScore: [3, 3],
-    momentumThreshold: [0.001, 0.006], rsiBuyLevel: [22, 35],
-    rsiSellLevel: [65, 78], cooldownCandles: [10, 20], minHoldCandles: [5, 10],
+    riskPercent: [0.5, 1.5], atrMultiplier: [2.5, 3.5], minScore: [4, 6],
+    momentumThreshold: [0.003, 0.008], rsiBuyLevel: [22, 30],
+    rsiSellLevel: [70, 78], cooldownCandles: [15, 25], minHoldCandles: [8, 15],
   };
 
   for (const [key, def] of Object.entries(defaults)) {
@@ -563,8 +609,8 @@ Return ONLY JSON with new parameter values and brief reasons:
     resetInsight.appliedParams[key] = val;
   }
 
-  // Resume with half the risk
-  _state.params.riskPercent = Math.min(_state.params.riskPercent, 2.5);
+  // Resume with minimal risk after emergency
+  _state.params.riskPercent = Math.min(_state.params.riskPercent, 1);
   _state.mode = 'normal';
   _state.peakCapital = _state.capital;  // reset drawdown reference
 
@@ -602,6 +648,8 @@ async function evaluatePaperReadiness(payload) {
   return result;
 }
 
+function getTokensUsed() { return _totalTokensUsed; }
+
 module.exports = {
   init,
   startTimers,
@@ -613,4 +661,5 @@ module.exports = {
   emergencyReset,
   recentTradeStats,
   evaluatePaperReadiness,
+  getTokensUsed,
 };

@@ -7,7 +7,10 @@ const signals = require('./signals');
 const risk = require('./risk');
 const logger = require('./logger');
 
-const SYMBOLS = ['BTC', 'ETH', 'SOL', 'BNB', 'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'GOLD', 'SILVER', 'OIL', 'SPX', 'NQ', 'DAX'];
+const { SYMBOLS, DEFAULT_PARAMS } = require('./config');
+
+// Use the same default params as live trading for consistent backtesting
+const BACKTEST_PARAMS = { ...DEFAULT_PARAMS };
 
 function daysBetween(a, b) {
   return Math.max(1, Math.round((b - a) / (24 * 3600 * 1000)));
@@ -219,17 +222,10 @@ async function runBacktest(params = {}) {
       }
 
       if (Object.keys(state.open).length >= 5 || state.open[s]) continue;
-      const sig = signals.score(ind, {
-        riskPercent: 5,
-        atrMultiplier: 1.5,
-        minScore: 3,
-        momentumThreshold: 0.003,
-        rsiBuyLevel: 28,
-        rsiSellLevel: 72,
-      }, null);
-      if (!sig.direction || sig.score < 3 || sig.activeSignals < 2) continue;
+      const sig = signals.score(ind, BACKTEST_PARAMS, s);
+      if (!sig.direction || sig.score < BACKTEST_PARAMS.minScore || sig.activeSignals < 2) continue;
 
-      const sizing = risk.calcPositionSize(s, sig.direction, cur.close, ind.atr7, { riskPercent: 5, atrMultiplier: 1.5 }, state.capital, state.open);
+      const sizing = risk.calcPositionSize(s, sig.direction, cur.close, ind.atr7, BACKTEST_PARAMS, state.capital, state.open);
       if (!sizing) continue;
 
       state.open[s] = {

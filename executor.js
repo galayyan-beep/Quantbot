@@ -1,10 +1,14 @@
 'use strict';
 
 /**
- * executor.js — Trade entry, exit, and position lifecycle management.
+ * executor.js — Trade entry, exit, and position lifecycle management (v2).
  *
- * All trades are paper-executed at the simulated bid/ask price from prices.js.
- * Every opened and closed trade is recorded to data/trades.json.
+ * Improvements over v1:
+ *  - Partial take-profit: close 50% at 2× ATR profit, let rest run to full TP
+ *  - Break-even stop: move stop to entry price once 1.5× ATR profit reached
+ *  - Time-based exit: close positions held too long (>60 candles) with no profit
+ *  - Async enter() with broker verification
+ *  - Loss cooldown with auto-recovery
  */
 
 const logger   = require('./logger');
@@ -40,33 +44,17 @@ function registerSetupOutcome(position, closedTrade) {
   }
 }
 
-// ─── Runtime state (injected from index.js via init) ─────────────────────────
-let _state       = null;   // shared mutable state object
-let _tradeLog    = [];     // in-memory copy of all trades
+// ─── Runtime state ───────────────────────────────────────────────────────────
+let _state       = null;
+let _tradeLog    = [];
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
 function init(sharedState, savedTrades = []) {
   _state    = sharedState;
   _tradeLog = savedTrades;
 }
 
-// ─── Enter a trade ────────────────────────────────────────────────────────────
-/**
- * Open a new position.
- *
- * @param {string}  symbol
- * @param {'long'|'short'} direction
- * @param {number}  size         Units to buy/sell
- * @param {number}  stopLoss
- * @param {number}  takeProfit
- * @param {number}  riskAmount   Capital at risk
- * @param {string[]} reasons     Signal reasons that triggered this trade
- * @param {number} sentimentScore Sentiment snapshot at entry
- * @returns {Object} position object
- */
-function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reasons, sentimentScore = 0) {
-  // Never allow dual-sided exposure on same symbol.
-  // If opposite direction exists, close it first, then proceed.
+// ─── Enter a trade ───────────────────────────────────────────────────────────
+async function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reasons, sentimentScore = 0) {
   const existingPos = _state.openPositions[symbol];
   if (existingPos) {
     if (existingPos.direction === direction) {
@@ -78,16 +66,11 @@ function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reason
       symbol,
       attemptedDirection: direction,
       existingDirection: existingPos.direction,
-      existingEntryPrice: existingPos.entryPrice,
     });
 
     const closed = exit(symbol, 'signal_reverse');
     if (!closed) {
-      logger.error('EXECUTOR', 'Entry blocked: failed to close opposite position before reverse', {
-        symbol,
-        attemptedDirection: direction,
-        existingDirection: existingPos.direction,
-      });
+      logger.error('EXECUTOR', 'Entry blocked: failed to close opposite position', { symbol });
       return null;
     }
   }
@@ -104,20 +87,23 @@ function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reason
     entryPrice,
     entryTime:    now,
     size,
+    originalSize: size,       // Track original for partial TP
     stopLoss,
     takeProfit,
-    trailingStop: stopLoss,   // starts equal to stop loss, only moves in profit direction
+    trailingStop: stopLoss,
     riskAmount,
-    candleCount:  0,          // incremented on each tick
+    candleCount:  0,
     reasons,
     sentimentScore,
     status:       'open',
     brokerDealId: null,
     brokerDealReference: null,
+    brokerConfirmed: false,
+    partialTpTaken: false,    // Has 50% been closed at 2× ATR?
+    breakEvenSet:  false,     // Has stop been moved to entry?
   };
 
   _state.openPositions[symbol] = position;
-  _state.capital               -= 0;   // paper: no capital locked, just tracked notionally
 
   logger.trade('EXECUTOR', `ENTER ${direction.toUpperCase()} ${symbol}`, {
     price:  entryPrice,
@@ -132,28 +118,38 @@ function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reason
   if (shouldLiveExecute()) {
     const broker = prices.getBroker();
     if (broker) {
-      broker.placePosition({ symbol, direction, size, stopLoss, takeProfit })
-        .then(res => {
-          position.brokerDealId = res?.dealId || null;
-          position.brokerDealReference = res?.dealReference || null;
-          logger.trade('EXECUTOR', 'Live order submitted', { symbol, dealId: position.brokerDealId, dealReference: position.brokerDealReference });
-        })
-        .catch(err => logger.error('EXECUTOR', 'Live order submission failed', { symbol, error: err.message }));
+      try {
+        const res = await broker.placePosition({ symbol, direction, size, stopLoss, takeProfit });
+        position.brokerDealId = res?.dealId || null;
+        position.brokerDealReference = res?.dealReference || null;
+        logger.trade('EXECUTOR', 'Live order submitted', { symbol, dealId: position.brokerDealId });
+
+        if (broker.getOpenPositions) {
+          try {
+            const livePositions = await broker.getOpenPositions();
+            const confirmed = (livePositions?.positions || []).some(
+              p => p.dealId === position.brokerDealId || p.market?.epic?.includes(symbol)
+            );
+            position.brokerConfirmed = !!confirmed;
+            if (!confirmed) {
+              logger.warn('EXECUTOR', 'Live order not confirmed — may be pending', { symbol });
+            }
+          } catch (verifyErr) {
+            logger.warn('EXECUTOR', 'Position verification failed', { symbol, error: verifyErr.message });
+          }
+        }
+      } catch (err) {
+        logger.error('EXECUTOR', 'Live order failed — rolling back', { symbol, error: err.message });
+        delete _state.openPositions[symbol];
+        return null;
+      }
     }
   }
 
   return position;
 }
 
-// ─── Exit a trade ─────────────────────────────────────────────────────────────
-/**
- * Close an existing position by symbol.
- *
- * @param {string} symbol
- * @param {string} exitReason  'stop_loss' | 'take_profit' | 'signal_reverse' | 'trailing_stop' | 'manual'
- * @param {number} [overridePrice]  If provided, use this as exit price (e.g., exact SL)
- * @returns {Object|null}  Closed trade record
- */
+// ─── Exit a trade ────────────────────────────────────────────────────────────
 function exit(symbol, exitReason, overridePrice) {
   const position = _state.openPositions[symbol];
   if (!position) {
@@ -176,13 +172,11 @@ function exit(symbol, exitReason, overridePrice) {
   const now         = Date.now();
   const isWin       = pnl > 0;
 
-  // Update capital
   _state.capital += pnl;
   if (_state.capital > _state.peakCapital) {
     _state.peakCapital = _state.capital;
   }
 
-  // Build closed trade record
   const closedTrade = {
     ...position,
     exitPrice,
@@ -195,30 +189,34 @@ function exit(symbol, exitReason, overridePrice) {
     status:     'closed',
   };
 
-  // Remove from open positions
   delete _state.openPositions[symbol];
 
-  // Append to trade log
   _tradeLog.push(closedTrade);
   logger.writeJSON('trades.json', _tradeLog);
 
-  // Update cooldown (symbol-level, candle-based handled in index.js)
+  // Cooldown (candle-based)
   const cooldownMs = ((_state.params.cooldownCandles || 10) * 2) * 1000;
   _state.cooldowns[symbol] = now + cooldownMs;
 
-  // Update consecutive loss tracking
+  // Consecutive loss tracking with time-based recovery
   if (!isWin) {
-    _state.recentLossBySymbol[symbol] = (_state.recentLossBySymbol[symbol] || 0) + 1;
+    const newCount = (_state.recentLossBySymbol[symbol] || 0) + 1;
+    _state.recentLossBySymbol[symbol] = newCount;
+    if (newCount >= 3) {
+      _state.cooldowns[symbol + '_loss_cooldown'] = now + 30 * 60 * 1000;
+      _state.recentLossBySymbol[symbol] = 0;
+      logger.trade('EXECUTOR', `${symbol}: 3 consecutive losses — 30min cooldown`, { symbol });
+    }
   } else {
     _state.recentLossBySymbol[symbol] = 0;
-    // Reset after 30-candle penalty if 3 consecutive losses were cleared by a win
+    delete _state.cooldowns[symbol + '_loss_cooldown'];
   }
 
-  // Update rolling win rate buffer
+  // Rolling win rate buffer
   _state.winRateBuffer.push(isWin);
   if (_state.winRateBuffer.length > 20) _state.winRateBuffer.shift();
 
-  // Update signal loss/win tracking for optimizer
+  // Signal loss/win tracking
   for (const reason of (position.reasons || [])) {
     const key = reason.split(':')[0];
     if (isWin) signals.recordSignalWin(key);
@@ -240,23 +238,80 @@ function exit(symbol, exitReason, overridePrice) {
     const broker = prices.getBroker();
     if (broker) {
       broker.closePosition(position.brokerDealId)
-        .then(() => logger.trade('EXECUTOR', 'Live position closed', { symbol, dealId: position.brokerDealId }))
-        .catch(err => logger.error('EXECUTOR', 'Live position close failed', { symbol, dealId: position.brokerDealId, error: err.message }));
+        .then(() => logger.trade('EXECUTOR', 'Live position closed', { symbol }))
+        .catch(err => logger.error('EXECUTOR', 'Live position close failed', { symbol, error: err.message }));
     }
   }
 
   return closedTrade;
 }
 
-// ─── Check exit conditions for all open positions ─────────────────────────────
-/**
- * Called every tick. Evaluates SL, TP, trailing stop, and signal reversal
- * for each open position.
- *
- * @param {Object} currentCandles  { symbol: { close, high, low } }
- * @param {Object} indicatorsMap   { symbol: indicatorResult }
- * @param {Object} params
- */
+// ─── Partial take-profit: close 50% at 2× ATR ───────────────────────────────
+function checkPartialTP(pos, currentPrice, atrValue) {
+  if (!atrValue || pos.partialTpTaken) return;
+
+  const profitDistance = pos.direction === 'long'
+    ? currentPrice - pos.entryPrice
+    : pos.entryPrice - currentPrice;
+
+  // At 2× ATR profit, take 50% off the table
+  if (profitDistance >= 2.0 * atrValue) {
+    const halfSize = pos.originalSize * 0.5;
+    const pnl = profitDistance * halfSize;
+
+    pos.size = pos.size - halfSize;
+    pos.partialTpTaken = true;
+    _state.capital += pnl;
+
+    if (_state.capital > _state.peakCapital) {
+      _state.peakCapital = _state.capital;
+    }
+
+    logger.trade('EXECUTOR', `PARTIAL TP ${pos.symbol} — closed 50% at 2×ATR`, {
+      symbol: pos.symbol,
+      pnl: pnl.toFixed(2),
+      remainingSize: pos.size.toFixed(6),
+      profitDistance: profitDistance.toFixed(4),
+    });
+  }
+}
+
+// ─── Break-even stop: move stop to entry after 1.5× ATR profit ──────────────
+function checkBreakEven(pos, currentPrice, atrValue) {
+  if (!atrValue || pos.breakEvenSet) return;
+
+  const profitDistance = pos.direction === 'long'
+    ? currentPrice - pos.entryPrice
+    : pos.entryPrice - currentPrice;
+
+  if (profitDistance >= 1.5 * atrValue) {
+    // Move stop to entry + small buffer (0.2× ATR to account for spread)
+    const buffer = 0.2 * atrValue;
+    const newStop = pos.direction === 'long'
+      ? pos.entryPrice + buffer
+      : pos.entryPrice - buffer;
+
+    if (pos.direction === 'long' && newStop > pos.stopLoss) {
+      pos.stopLoss = newStop;
+      pos.trailingStop = Math.max(pos.trailingStop, newStop);
+      pos.breakEvenSet = true;
+      logger.trade('EXECUTOR', `BREAK-EVEN ${pos.symbol} — stop moved to entry`, {
+        symbol: pos.symbol,
+        newStop: newStop.toFixed(4),
+      });
+    } else if (pos.direction === 'short' && newStop < pos.stopLoss) {
+      pos.stopLoss = newStop;
+      pos.trailingStop = Math.min(pos.trailingStop, newStop);
+      pos.breakEvenSet = true;
+      logger.trade('EXECUTOR', `BREAK-EVEN ${pos.symbol} — stop moved to entry`, {
+        symbol: pos.symbol,
+        newStop: newStop.toFixed(4),
+      });
+    }
+  }
+}
+
+// ─── Check exits for all open positions ──────────────────────────────────────
 function checkExits(currentCandles, indicatorsMap, params) {
   const minHold = params.minHoldCandles || 5;
 
@@ -264,13 +319,20 @@ function checkExits(currentCandles, indicatorsMap, params) {
     const candle = currentCandles[symbol];
     if (!candle) continue;
 
-    // Increment candle counter
     pos.candleCount += 1;
+    pos.lastPrice = candle.close;  // Track for drawdown checks
 
     const { high, low, close } = candle;
     const ind = indicatorsMap[symbol];
+    const atrValue = ind?.atr7 || null;
 
-    // ── Hard stop loss hit? ────────────────────────────────────────────────
+    // ── Partial take-profit check ─────────────────────────────────────────
+    if (atrValue) {
+      checkPartialTP(pos, close, atrValue);
+      checkBreakEven(pos, close, atrValue);
+    }
+
+    // ── Hard stop loss hit? ───────────────────────────────────────────────
     if (pos.direction === 'long' && low <= pos.stopLoss) {
       exit(symbol, 'stop_loss', pos.stopLoss);
       continue;
@@ -280,7 +342,7 @@ function checkExits(currentCandles, indicatorsMap, params) {
       continue;
     }
 
-    // ── Take profit hit? ───────────────────────────────────────────────────
+    // ── Take profit hit? ──────────────────────────────────────────────────
     if (pos.direction === 'long' && high >= pos.takeProfit) {
       exit(symbol, 'take_profit', pos.takeProfit);
       continue;
@@ -290,8 +352,8 @@ function checkExits(currentCandles, indicatorsMap, params) {
       continue;
     }
 
-    // ── Trailing stop hit? ─────────────────────────────────────────────────
-    if (pos.trailingStop !== pos.stopLoss) {   // trailing has moved
+    // ── Trailing stop hit? ────────────────────────────────────────────────
+    if (pos.trailingStop !== pos.stopLoss) {
       if (pos.direction === 'long' && low <= pos.trailingStop) {
         exit(symbol, 'trailing_stop', pos.trailingStop);
         continue;
@@ -302,7 +364,18 @@ function checkExits(currentCandles, indicatorsMap, params) {
       }
     }
 
-    // ── Signal reversal exit (only after minimum hold) ─────────────────────
+    // ── Time-based exit: close stale positions with no profit ─────────────
+    if (pos.candleCount >= 60) {
+      const priceDiff = pos.direction === 'long'
+        ? close - pos.entryPrice
+        : pos.entryPrice - close;
+      if (priceDiff <= 0) {
+        exit(symbol, 'time_exit');
+        continue;
+      }
+    }
+
+    // ── Signal reversal exit (only after minimum hold) ────────────────────
     if (pos.candleCount >= minHold && ind) {
       const sig = signals.score(ind, params);
       const rev = pos.direction === 'long'
