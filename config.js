@@ -34,13 +34,13 @@ const SYMBOLS = Object.keys(INSTRUMENTS);
 const DEFAULT_PARAMS = {
   riskPercent: 1.5,           // risk 1.5% per trade ($1.50 on $100)
   atrMultiplier: 2.5,        // stop loss at 2.5× ATR
-  minScore: 3,               // lower threshold = more trades
-  momentumThreshold: 0.003,   // 0.3% minimum momentum (lower = more triggers)
-  rsiBuyLevel: 30,            // slightly wider RSI range
-  rsiSellLevel: 70,
-  cooldownCandles: 8,         // 16 seconds between trades per symbol (fast re-entry)
-  minHoldCandles: 5,          // hold at least 10 seconds
-  maxPositions: 4,            // 4 concurrent positions for constant action
+  minScore: 2,               // low threshold = trades fast
+  momentumThreshold: 0.002,   // 0.2% momentum (very sensitive)
+  rsiBuyLevel: 32,
+  rsiSellLevel: 68,
+  cooldownCandles: 5,         // 10 seconds between trades per symbol
+  minHoldCandles: 3,          // hold at least 6 seconds
+  maxPositions: 4,
 };
 
 // ─── Risk constants ──────────────────────────────────────────────────────────

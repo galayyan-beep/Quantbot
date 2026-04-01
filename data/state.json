@@ -5,12 +5,12 @@
   "params": {
     "riskPercent": 1.5,
     "atrMultiplier": 2.5,
-    "minScore": 3,
-    "momentumThreshold": 0.003,
-    "rsiBuyLevel": 30,
-    "rsiSellLevel": 70,
-    "cooldownCandles": 8,
-    "minHoldCandles": 5,
+    "minScore": 2,
+    "momentumThreshold": 0.002,
+    "rsiBuyLevel": 32,
+    "rsiSellLevel": 68,
+    "cooldownCandles": 5,
+    "minHoldCandles": 3,
     "maxPositions": 4
   },
   "mode": "normal",
