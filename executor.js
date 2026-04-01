@@ -64,7 +64,7 @@ function init(sharedState, savedTrades = []) {
  * @param {number} sentimentScore Sentiment snapshot at entry
  * @returns {Object} position object
  */
-function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reasons, sentimentScore = 0) {
+async function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reasons, sentimentScore = 0) {
   // Never allow dual-sided exposure on same symbol.
   // If opposite direction exists, close it first, then proceed.
   const existingPos = _state.openPositions[symbol];
@@ -132,13 +132,38 @@ function enter(symbol, direction, size, stopLoss, takeProfit, riskAmount, reason
   if (shouldLiveExecute()) {
     const broker = prices.getBroker();
     if (broker) {
-      broker.placePosition({ symbol, direction, size, stopLoss, takeProfit })
-        .then(res => {
-          position.brokerDealId = res?.dealId || null;
-          position.brokerDealReference = res?.dealReference || null;
-          logger.trade('EXECUTOR', 'Live order submitted', { symbol, dealId: position.brokerDealId, dealReference: position.brokerDealReference });
-        })
-        .catch(err => logger.error('EXECUTOR', 'Live order submission failed', { symbol, error: err.message }));
+      try {
+        const res = await broker.placePosition({ symbol, direction, size, stopLoss, takeProfit });
+        position.brokerDealId = res?.dealId || null;
+        position.brokerDealReference = res?.dealReference || null;
+        logger.trade('EXECUTOR', 'Live order submitted', { symbol, dealId: position.brokerDealId, dealReference: position.brokerDealReference });
+
+        // Verify the position was actually created by checking broker positions
+        if (broker.getOpenPositions) {
+          try {
+            const livePositions = await broker.getOpenPositions();
+            const confirmed = (livePositions?.positions || []).some(
+              p => p.dealId === position.brokerDealId || p.market?.epic?.includes(symbol)
+            );
+            if (!confirmed) {
+              logger.warn('EXECUTOR', 'Live order not confirmed in broker positions — may be pending', {
+                symbol, dealId: position.brokerDealId,
+              });
+              position.brokerConfirmed = false;
+            } else {
+              position.brokerConfirmed = true;
+              logger.trade('EXECUTOR', 'Live order confirmed in broker', { symbol });
+            }
+          } catch (verifyErr) {
+            logger.warn('EXECUTOR', 'Position verification check failed', { symbol, error: verifyErr.message });
+          }
+        }
+      } catch (err) {
+        logger.error('EXECUTOR', 'Live order submission failed — closing paper position', { symbol, error: err.message });
+        // Roll back the paper position since live order failed
+        delete _state.openPositions[symbol];
+        return null;
+      }
     }
   }
 

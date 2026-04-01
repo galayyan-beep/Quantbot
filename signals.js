@@ -243,21 +243,29 @@ function score(ind, params, symbol = null) {
     if (withBias.sentimentScore < -2) reasons.push('sentimentBias:-1');
   }
 
-  // ── Determine direction ────────────────────────────────────────────────────
+  // ── Determine direction using NET score (long - short cancellation) ──────
   const netScore = longScore - shortScore;
   let direction  = null;
   let finalScore = 0;
 
-  if (longScore > shortScore && longScore >= 1) {
+  // Use net score so opposing signals properly cancel out.
+  // e.g. emaCross:+3 and upperBBWithRsi:-2 nets to +1, not +5.
+  if (netScore > 0) {
     direction  = 'long';
-    finalScore = longScore;
-  } else if (shortScore > longScore && shortScore >= 1) {
+    finalScore = netScore;
+  } else if (netScore < 0) {
     direction  = 'short';
-    finalScore = shortScore;
+    finalScore = Math.abs(netScore);
   }
 
-  // Count distinct signal keys that contributed
-  const activeSignals = new Set(reasons.map(r => r.split(':')[0])).size;
+  // Count distinct signal keys that contributed IN the winning direction only
+  const winningReasons = reasons.filter(r => {
+    const val = r.split(':')[1];
+    if (direction === 'long') return val && val.startsWith('+');
+    if (direction === 'short') return val && val.startsWith('-');
+    return false;
+  });
+  const activeSignals = new Set(winningReasons.map(r => r.split(':')[0])).size;
 
   const blockedBySentiment = symbol && direction
     ? sentiment.blocksDirection(symbol, direction)

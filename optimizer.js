@@ -33,6 +33,9 @@ function getClient() {
 
 // ─── Shared state reference (injected from index.js) ─────────────────────────
 let _state = null;
+let _lastLayer3At = 0;   // Timestamp of last Layer 3 run
+const LAYER1_COOLDOWN_AFTER_L3 = 10 * 60 * 1000;  // 10min cooldown after deep analysis
+let _totalTokensUsed = 0;  // Track Anthropic API usage
 
 function init(sharedState) {
   _state = sharedState;
@@ -51,6 +54,10 @@ async function callClaude(systemPrompt, userContent, maxTokens = 1024) {
       ],
     });
     const text = res.content[0]?.text || '';
+    // Track token usage for cost monitoring
+    const inputTokens = res.usage?.input_tokens || 0;
+    const outputTokens = res.usage?.output_tokens || 0;
+    _totalTokensUsed += inputTokens + outputTokens;
     // Extract first JSON object from response
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) { logger.warn('OPTIM', 'No JSON found in Claude response', { text: text.slice(0, 200) }); return null; }
@@ -162,6 +169,12 @@ function recentTradeHealth(trades, n = 30) {
 // ─── LAYER 1: Fast loop — every 5 minutes ────────────────────────────────────
 async function layer1Fast(trades) {
   if (!trades || trades.length < 10) return;
+
+  // Skip Layer 1 for 10 minutes after Layer 3 runs to prevent thrashing
+  if (_lastLayer3At && Date.now() - _lastLayer3At < LAYER1_COOLDOWN_AFTER_L3) {
+    logger.optim('L1', 'Skipped — cooling down after Layer 3 deep analysis');
+    return;
+  }
 
   const stats = recentTradeStats(trades, 20);
   if (!stats) return;
@@ -298,6 +311,7 @@ async function layer2Medium(trades, instruments) {
 async function layer3Deep(trades, optimizations) {
   if (!trades || trades.length < 30) return;
 
+  _lastLayer3At = Date.now();
   logger.optim('L3', 'Running deep AI strategy review');
 
   // Summarise full history to stay within token limits
@@ -491,8 +505,38 @@ async function layer5SelfHeal(trades, drawdown, profitFactorWindow) {
     logger.optim('L5', 'Observation period ended — resuming normal trading');
   }
 
+  // ── Drawdown hits 10% → close all losing positions to limit damage ──────
+  if (drawdown >= 0.10 && _state.openPositions) {
+    const openSymbols = Object.keys(_state.openPositions);
+    for (const sym of openSymbols) {
+      const pos = _state.openPositions[sym];
+      if (!pos) continue;
+      // Calculate unrealized P&L direction
+      const currentPrice = pos.lastPrice || pos.entryPrice;
+      const priceDiff = pos.direction === 'long'
+        ? currentPrice - pos.entryPrice
+        : pos.entryPrice - currentPrice;
+      if (priceDiff < 0) {
+        logger.warn('L5', `Drawdown ≥ 10% — force-closing losing position`, {
+          symbol: sym,
+          direction: pos.direction,
+          drawdown: (drawdown * 100).toFixed(1) + '%',
+        });
+        // Exit will be handled by executor via the shared state reference
+        if (_state._executor) _state._executor.exit(sym, 'drawdown_force_close');
+      }
+    }
+  }
+
   // ── Drawdown hits 12% → full stop, AI strategy reset ─────────────────────
   if (drawdown >= 0.12 && _state.mode !== 'paused') {
+    // Close ALL remaining positions before pausing
+    if (_state.openPositions && _state._executor) {
+      for (const sym of Object.keys(_state.openPositions)) {
+        logger.warn('L5', `HARD STOP: closing all positions`, { symbol: sym });
+        _state._executor.exit(sym, 'emergency_close');
+      }
+    }
     _state.mode = 'paused';
     logger.warn('L5', 'HARD STOP: drawdown ≥ 12% — requesting AI strategy reset');
     await emergencyReset(trades);
@@ -602,6 +646,8 @@ async function evaluatePaperReadiness(payload) {
   return result;
 }
 
+function getTokensUsed() { return _totalTokensUsed; }
+
 module.exports = {
   init,
   startTimers,
@@ -613,4 +659,5 @@ module.exports = {
   emergencyReset,
   recentTradeStats,
   evaluatePaperReadiness,
+  getTokensUsed,
 };

@@ -2,23 +2,7 @@
 
 const logger = require('./logger');
 const { CapitalClient } = require('./capitalApi');
-
-const INSTRUMENTS = {
-  BTC:    { category: 'crypto', spread: 0.0002 },
-  ETH:    { category: 'crypto', spread: 0.0003 },
-  SOL:    { category: 'crypto', spread: 0.0005 },
-  BNB:    { category: 'crypto', spread: 0.0004 },
-  EURUSD: { category: 'forex', spread: 0.0001 },
-  GBPUSD: { category: 'forex', spread: 0.0001 },
-  USDJPY: { category: 'forex', spread: 0.0001 },
-  AUDUSD: { category: 'forex', spread: 0.0001 },
-  GOLD:   { category: 'commodity', spread: 0.0003 },
-  SILVER: { category: 'commodity', spread: 0.0004 },
-  OIL:    { category: 'commodity', spread: 0.0005 },
-  SPX:    { category: 'index', spread: 0.0002 },
-  NQ:     { category: 'index', spread: 0.0002 },
-  DAX:    { category: 'index', spread: 0.0002 },
-};
+const { INSTRUMENTS } = require('./config');
 
 const prices = {};
 let broker = null;

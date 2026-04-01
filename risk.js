@@ -8,20 +8,15 @@
  */
 
 const logger = require('./logger');
-const { INSTRUMENTS } = require('./prices');
+const {
+  INSTRUMENTS,
+  MAX_TOTAL_EXPOSURE,
+  EXPOSURE_TOLERANCE_PCT,
+  MAX_CRYPTO_BASKET_EXPOSURE,
+  CORRELATION_GROUPS,
+} = require('./config');
 
-const MAX_TOTAL_EXPOSURE = 100;
-const EXPOSURE_TOLERANCE_PCT = 0.02;
 const MAX_TOTAL_EXPOSURE_WITH_TOLERANCE = MAX_TOTAL_EXPOSURE * (1 + EXPOSURE_TOLERANCE_PCT);
-const MAX_CRYPTO_BASKET_EXPOSURE = 70;
-
-// ─── Correlation groups (never hold two from same group simultaneously) ───────
-const CORRELATION_GROUPS = [
-  new Set(['BTC', 'ETH', 'SOL', 'BNB']),
-  new Set(['EURUSD', 'GBPUSD', 'AUDUSD']),
-  new Set(['GOLD', 'SILVER']),
-  new Set(['SPX', 'NQ', 'DAX']),
-];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
