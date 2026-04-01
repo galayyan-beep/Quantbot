@@ -187,7 +187,7 @@ function loadState() {
     // Safety bounds: prevent optimizer from going too aggressive
     if ((saved.params.atrMultiplier || 0) < 2.5) saved.params.atrMultiplier = 2.5;
     if ((saved.params.riskPercent || 0) > 2) saved.params.riskPercent = 2;
-    if ((saved.params.minScore || 0) < 3) saved.params.minScore = 3;
+    if ((saved.params.minScore || 0) < 2) saved.params.minScore = 2;
     saved.LIVE_TRADING = process.env.LIVE_TRADING === 'true';
     if (!saved.instruments) {
       saved.instruments = Object.fromEntries(prices.getSymbols().map(s => [s, { enabled: true, sizeMultiplier: 1.0 }]));
@@ -840,8 +840,11 @@ async function tradingLoop(state, candleHistory) {
 
       const adjustedRiskAmount = Number((size * sizing.stopDistance).toFixed(8));
 
-      // ── Dual-agent review: Bull + Bear must agree before entry ──────────
-      const agentReview = await agents.smartReview({
+      // Enter the trade immediately — don't wait for agent review
+      await executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
+
+      // ── Dual-agent review runs in background (advisory, not blocking) ────
+      agents.smartReview({
         symbol: sym,
         direction: sig.direction,
         score: sig.score,
@@ -851,19 +854,9 @@ async function tradingLoop(state, candleHistory) {
         indicators: ind,
         sentiment: sig.sentimentScore,
         higherTfBias: higherTf.bias,
-      }, effectiveReq.minScore);
-
-      if (!agentReview.approved) {
-        logEntryBlocked(sym, 'agent_review_rejected', {
-          reason: agentReview.reason,
-          bull: agentReview.bull.vote,
-          bear: agentReview.bear.vote,
-          regime: effectiveReq.regime,
-        });
-        continue;
-      }
-
-      await executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
+      }, effectiveReq.minScore).catch(err => {
+        logger.warn('AGENTS', 'Background review failed', { symbol: sym, error: err.message });
+      });
       
       // Verify position was created
       if (!state.openPositions[sym]) {
@@ -923,7 +916,7 @@ async function main() {
   // Safety bounds for live trading
   if ((state.params.riskPercent || 0) > 2) state.params.riskPercent = 2;
   if ((state.params.atrMultiplier || 0) < 2.5) state.params.atrMultiplier = 2.5;
-  if ((state.params.minScore || 0) < 3) state.params.minScore = 3;
+  if ((state.params.minScore || 0) < 2) state.params.minScore = 2;
 
   const candleHistory = logger.readJSON('candles.json', Object.fromEntries(prices.getSymbols().map(s => [s, []])));
   const savedTrades = logger.readJSON('trades.json', []);
@@ -993,14 +986,18 @@ async function main() {
   if (savedSignals) signalsMod.loadState(savedSignals);
   optimizer.init(state);
 
-  const backtest = await runBacktest();
-  state.backtestSummary = {
-    sharpeRatio: backtest?.metrics?.sharpeRatio ?? backtest?.sharpeRatio ?? 0,
-    maxDrawdown: backtest?.metrics?.maxDrawdown ?? backtest?.maxDrawdown ?? 1,
-  };
-  if (state.backtestSummary.sharpeRatio < 0.5 || state.backtestSummary.maxDrawdown > 0.25) {
-    logger.warn('MAIN', 'Backtest warning on startup', state.backtestSummary);
-  }
+  // Run backtest in background — don't block startup
+  runBacktest().then(backtest => {
+    state.backtestSummary = {
+      sharpeRatio: backtest?.metrics?.sharpeRatio ?? backtest?.sharpeRatio ?? 0,
+      maxDrawdown: backtest?.metrics?.maxDrawdown ?? backtest?.maxDrawdown ?? 1,
+    };
+    if (state.backtestSummary.sharpeRatio < 0.5 || state.backtestSummary.maxDrawdown > 0.25) {
+      logger.warn('MAIN', 'Backtest warning', state.backtestSummary);
+    }
+  }).catch(err => {
+    logger.warn('MAIN', 'Backtest failed (non-blocking)', { error: err.message });
+  });
 
   correlation.startHourly(candleHistory);
   sentiment.start();

@@ -87,9 +87,9 @@ function adjustWeight(key, delta) {
  * and 0 if volume is too low (below 60% of average).
  */
 function volumeStrength(ind) {
-  if (!ind || !ind.volume || !ind.avgVolume) return 1.0; // no volume data, allow signal
+  if (!ind || !ind.volume || !ind.avgVolume) return 1.0;
   const ratio = ind.volume / Math.max(ind.avgVolume, 1);
-  if (ratio < 0.6) return 0;     // too low volume, kill the signal
+  if (ratio < 0.4) return 0.7;   // low volume, reduce slightly (was: kill)
   if (ratio > 1.5) return 1.2;   // high volume, slight boost
   return 1.0;
 }
@@ -117,8 +117,8 @@ function score(ind, params, symbol = null) {
   const reasons  = [];
   const volMul = volumeStrength(ind);
 
-  // ── RSI dead zone penalty: if RSI is 42-58, reduce all signal weights ──────
-  const rsiPenalty = (rsi7 !== null && rsi7 > 42 && rsi7 < 58) ? 0.6 : 1.0;
+  // RSI penalty disabled — was filtering too many valid trades
+  const rsiPenalty = 1.0;
 
   // ── Signal 1: EMA3 crosses EMA8 with price on correct side of EMA50 ───────
   if (isSignalEnabled('emaCross') && ema3 && ema8 && ema50 && prevEma3 && prevEma8) {
