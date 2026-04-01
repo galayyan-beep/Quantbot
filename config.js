@@ -29,6 +29,11 @@ const INSTRUMENTS = {
 
 const SYMBOLS = Object.keys(INSTRUMENTS);
 
+// ─── Focus instruments — only trade these ────────────────────────────────────
+// The bot will only open NEW positions on these symbols.
+// All other instruments are used for data/correlation but NOT traded.
+const FOCUS_SYMBOLS = ['GOLD', 'BTC', 'SPX'];
+
 // ─── Default trading parameters ──────────────────────────────────────────────
 // Tuned for active trading on a ~$100 live account.
 const DEFAULT_PARAMS = {
@@ -85,4 +90,5 @@ module.exports = {
   INITIAL_CAPITAL,
   CORRELATION_GROUPS,
   isInPeakHours,
+  FOCUS_SYMBOLS,
 };

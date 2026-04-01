@@ -23,6 +23,7 @@ const {
   TICK_INTERVAL_MS,
   DEFAULT_PARAMS,
   isInPeakHours,
+  FOCUS_SYMBOLS,
 } = require('./config');
 
 const sessionStartIdx = {};
@@ -647,6 +648,7 @@ async function tradingLoop(state, candleHistory) {
   if (warmEnough) {
     for (const sym of prices.getSymbols()) {
       // ── Essential checks only ──────────────────────────────────────────
+      if (!FOCUS_SYMBOLS.includes(sym)) continue;  // only trade Gold, BTC, US500
       if (isWeekendUtc() && !isWeekendEligibleSymbol(sym)) continue;
       if (state.openPositions[sym]) continue;  // already have a position
       if (Object.keys(state.openPositions).length >= (state.params.maxPositions || 4)) break; // max positions
