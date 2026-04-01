@@ -575,6 +575,25 @@ async function tradingLoop(state, candleHistory) {
     state.winRateBuffer = state.winRateBuffer.slice(-250);
   }
 
+  // ── Stale-state recovery: if no positions are open and all symbols are blocked,
+  //    reset loss counters and expired cooldowns so the bot can trade again.
+  if (Object.keys(state.openPositions).length === 0) {
+    // Clean up expired cooldowns
+    for (const key of Object.keys(state.cooldowns)) {
+      if (state.cooldowns[key] < Date.now()) {
+        delete state.cooldowns[key];
+      }
+    }
+    // Clean up expired loss cooldowns and reset counters
+    for (const sym of prices.getSymbols()) {
+      const lossCooldown = state.cooldowns[sym + '_loss_cooldown'];
+      if (lossCooldown && Date.now() >= lossCooldown) {
+        delete state.cooldowns[sym + '_loss_cooldown'];
+        state.recentLossBySymbol[sym] = 0;
+      }
+    }
+  }
+
   // Cleanup pfWindowTrades to prevent memory leak
   if (state.pfWindowTrades.length > 200) {
     state.pfWindowTrades = state.pfWindowTrades.slice(-100);

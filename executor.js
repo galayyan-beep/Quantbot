@@ -231,12 +231,20 @@ function exit(symbol, exitReason, overridePrice) {
   const cooldownMs = ((_state.params.cooldownCandles || 10) * 2) * 1000;
   _state.cooldowns[symbol] = now + cooldownMs;
 
-  // Update consecutive loss tracking
+  // Update consecutive loss tracking with time-based recovery
   if (!isWin) {
-    _state.recentLossBySymbol[symbol] = (_state.recentLossBySymbol[symbol] || 0) + 1;
+    const newCount = (_state.recentLossBySymbol[symbol] || 0) + 1;
+    _state.recentLossBySymbol[symbol] = newCount;
+    // At 3 consecutive losses, set a 30-minute cooldown and reset counter
+    // so the symbol isn't permanently blocked
+    if (newCount >= 3) {
+      _state.cooldowns[symbol + '_loss_cooldown'] = now + 30 * 60 * 1000;
+      _state.recentLossBySymbol[symbol] = 0;
+      logger.trade('EXECUTOR', `${symbol}: 3 consecutive losses — 30min cooldown`, { symbol });
+    }
   } else {
     _state.recentLossBySymbol[symbol] = 0;
-    // Reset after 30-candle penalty if 3 consecutive losses were cleared by a win
+    delete _state.cooldowns[symbol + '_loss_cooldown'];
   }
 
   // Update rolling win rate buffer

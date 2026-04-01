@@ -270,17 +270,26 @@ function preTradChecks({
     return { allowed: false, reason: `${symbol} in cooldown (${secsLeft}s left)` };
   }
 
-  // 3 consecutive losses on symbol → skip 30 candles
+  // 3 consecutive losses on symbol → cooldown for 30 minutes (not permanent block)
   const symLosses = recentLossBySymbol[symbol] || 0;
   if (symLosses >= 3) {
-    return { allowed: false, reason: `${symbol} skipped: 3 consecutive losses` };
+    // Check if the cooldown already covers this — if symbol has an active cooldown, respect it.
+    // If no cooldown is active but losses >= 3, the trading loop should set a timed cooldown
+    // and then reset the counter. Don't block permanently.
+    const cooldownUntilForLosses = cooldowns[symbol + '_loss_cooldown'];
+    if (cooldownUntilForLosses && Date.now() < cooldownUntilForLosses) {
+      const secsLeft = Math.round((cooldownUntilForLosses - Date.now()) / 1000);
+      return { allowed: false, reason: `${symbol} loss cooldown (${secsLeft}s left)` };
+    }
+    // Cooldown expired or never set — allow trading again (counter reset by caller)
   }
 
-  // Rolling 20-trade win-rate < 40% → observation mode (handled in index.js)
+  // Rolling 20-trade win-rate guard: require at least 20 trades for this to activate,
+  // and use 25% threshold (not 40%) to avoid permanent lockout during learning phase
   if (winRateBuffer && winRateBuffer.length >= 20) {
     const wins = winRateBuffer.slice(-20).filter(Boolean).length;
-    if (wins / 20 < 0.40) {
-      return { allowed: false, reason: 'Win-rate below 40% — observation mode required' };
+    if (wins / 20 < 0.25) {
+      return { allowed: false, reason: 'Win-rate below 25% over last 20 trades — observation mode' };
     }
   }
 
