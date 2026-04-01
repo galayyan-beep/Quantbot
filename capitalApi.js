@@ -105,11 +105,17 @@ class CapitalClient {
     this.identifier = process.env.CAPITAL_IDENTIFIER || '';
     this.requiredClientId = process.env.CAPITAL_CLIENT_ID || '';
     this.targetAvailableBalance = Number(process.env.CAPITAL_TARGET_AVAILABLE_BALANCE || 100);
-    this.targetAccountId = process.env.CAPITAL_ACCOUNT_ID || '313428098873906372';
+    // CRITICAL: This MUST be the "main" account ID. Set via CAPITAL_ACCOUNT_ID env var.
+    // If not set, the bot will refuse to trade (no fallback).
+    this.targetAccountId = process.env.CAPITAL_ACCOUNT_ID || '';
+    if (!this.targetAccountId) {
+      logger.warn('CAPITAL', 'CAPITAL_ACCOUNT_ID not set — bot will find and lock to the "main" account on first auth');
+    }
     this.cst = null;
     this.securityToken = null;
     this.authenticatedAt = 0;
     this.activeAccountId = null;
+    this.lockedAccountId = null;   // Once set, NEVER trade on any other account
     this.lastBySymbol = {};
     this.lastMarketStatus = {};
     this.marketStatusCache = {};
@@ -195,10 +201,33 @@ class CapitalClient {
 
   targetAccountFrom(body) {
     const accounts = Array.isArray(body?.accounts) ? body.accounts : [];
+
+    // 1. If we have a locked account ID, ONLY use that
+    if (this.lockedAccountId) {
+      const locked = accounts.find(a => String(a?.accountId || '').trim() === this.lockedAccountId);
+      if (locked) return locked;
+      logger.error('CAPITAL', 'LOCKED account not found in session!', { lockedAccountId: this.lockedAccountId });
+      return null;
+    }
+
+    // 2. If CAPITAL_ACCOUNT_ID is set, use it
     if (this.targetAccountId) {
       const byId = accounts.find(a => String(a?.accountId || '').trim() === this.targetAccountId);
       if (byId) return byId;
     }
+
+    // 3. Auto-detect: find account named "main" (case-insensitive)
+    const mainAccount = accounts.find(a => {
+      const name = String(a?.accountName || a?.name || '').toLowerCase().trim();
+      return name === 'main';
+    });
+    if (mainAccount) {
+      const id = String(mainAccount.accountId || '').trim();
+      logger.info('CAPITAL', 'Auto-detected "main" account', { accountId: id, name: mainAccount.accountName || mainAccount.name });
+      return mainAccount;
+    }
+
+    // 4. Fallback to balance matching
     return this.pickTargetAccount(accounts);
   }
 
@@ -567,17 +596,32 @@ class CapitalClient {
       });
     }
 
+    // LOCK to this account for the entire session — never trade on another account
+    if (!this.lockedAccountId) {
+      this.lockedAccountId = targetAccountId;
+      this.targetAccountId = targetAccountId;
+      logger.info('CAPITAL', `ACCOUNT LOCKED — Only trading on account "${target.accountName || target.name || 'unknown'}" (${targetAccountId})`, {
+        lockedAccountId: targetAccountId,
+        targetAvailable: targetAvail,
+      });
+    }
+
+    // Verify we're still on the locked account
+    if (this.lockedAccountId && targetAccountId !== this.lockedAccountId) {
+      throw new Error(`Trading blocked: target account '${targetAccountId}' does not match locked account '${this.lockedAccountId}'`);
+    }
+
     if (!this.safetyConfirmedLogged) {
-      logger.info('CAPITAL', 'SAFETY CONFIRMED — Account 3 with $100 found. Trading capped at $100 maximum exposure.', {
+      logger.info('CAPITAL', `SAFETY CONFIRMED — Locked to "${target.accountName || target.name || 'main'}" with $${targetAvail}. Max exposure $100.`, {
         activeAccountId: currentAccountId,
-        targetAccountId,
+        lockedAccountId: this.lockedAccountId,
         targetAvailable: targetAvail,
       });
       this.safetyConfirmedLogged = true;
     }
 
-    if (this.targetAccountId && currentAccountId !== this.targetAccountId) {
-      await this.switchActiveAccount(this.targetAccountId);
+    if (currentAccountId !== this.lockedAccountId) {
+      await this.switchActiveAccount(this.lockedAccountId);
     }
 
     this.authenticatedAt = Date.now();
@@ -681,7 +725,16 @@ class CapitalClient {
     const ready = await this.auth();
     if (!ready) throw new Error('Capital auth unavailable');
 
+    // HARD CHECK: refuse to trade if not on the locked account
+    if (!this.lockedAccountId) {
+      throw new Error('Trading blocked: no account locked — cannot place orders safely');
+    }
+
     const ensured = await this.ensureTargetAccountActive({ force: true });
+    const activeId = String(ensured?.activeAccountId || this.activeAccountId || '').trim();
+    if (activeId !== this.lockedAccountId) {
+      throw new Error(`Trading blocked: active account '${activeId}' is NOT the locked main account '${this.lockedAccountId}'`);
+    }
     const market = await this.getMarketDetailsByEpic(epic, { forceRefresh: true });
     if (!market.isOpen) {
       const closedErr = new Error(`Market is closed for ${symbol} (${epic}) with status '${market.status || 'UNKNOWN'}'`);
@@ -755,6 +808,11 @@ class CapitalClient {
     if (!dealId) return null;
     const ready = await this.auth();
     if (!ready) throw new Error('Capital auth unavailable');
+
+    // HARD CHECK: only close on locked account
+    if (!this.lockedAccountId) {
+      throw new Error('Trading blocked: no account locked');
+    }
     await this.ensureTargetAccountActive({ force: true });
     const { body } = await this.request(`/positions/${encodeURIComponent(dealId)}`, {
       method: 'DELETE',
