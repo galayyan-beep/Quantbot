@@ -646,217 +646,66 @@ async function tradingLoop(state, candleHistory) {
   const warmEnough = symbolsReadyForTrading.length > 0;
   if (warmEnough) {
     for (const sym of prices.getSymbols()) {
-      if (isWeekendUtc() && !isWeekendEligibleSymbol(sym)) {
-        logEntryBlocked(sym, 'weekend_mode_symbol_disabled');
-        continue;
-      }
+      // ── Essential checks only ──────────────────────────────────────────
+      if (isWeekendUtc() && !isWeekendEligibleSymbol(sym)) continue;
+      if (state.openPositions[sym]) continue;  // already have a position
+      if (Object.keys(state.openPositions).length >= (state.params.maxPositions || 4)) break; // max positions
 
-      const ins = state.instruments[sym] || { enabled: true, sizeMultiplier: 1 };
-      if (!ins.enabled) {
-        logEntryBlocked(sym, 'instrument_disabled');
-        continue;
-      }
-
-      // Only trade during peak liquidity hours for each instrument
-      if (!isInPeakHours(sym)) {
-        logEntryBlocked(sym, 'outside_peak_hours');
-        continue;
-      }
-
+      // Check market is open
       let marketStatus = prices.getCachedMarketStatus(sym);
       if (!marketStatus) {
-        try {
-          marketStatus = await prices.getMarketStatus(sym);
-        } catch (err) {
-          logEntryBlocked(sym, 'market_status_check_failed', { error: err.message });
-          continue;
-        }
+        try { marketStatus = await prices.getMarketStatus(sym); }
+        catch { continue; }
       }
-      if (!marketStatus || !marketStatus.isOpen) {
-        logEntryBlocked(sym, 'market_closed', { marketStatus: marketStatus?.status || null });
-        continue;
-      }
+      if (!marketStatus?.isOpen) continue;
 
+      // Need indicators
       const ind = indicatorsMap[sym];
-      if (!ind || !ind.atr7) {
-        logEntryBlocked(sym, 'insufficient_indicator_data');
-        continue;
-      }
+      if (!ind || !ind.atr7) continue;
 
-      const entryReq = adaptiveEntryRequirements(sym, ind, state.params);
-  const higherTf = higherTimeframeTrend(sym, candleHistory);
-
+      // ── Score the signal ───────────────────────────────────────────────
       const sig = signalsMod.score(ind, state.params, sym);
-      const effectiveReq = effectiveEntryRequirements(sym, entryReq, higherTf, sig);
-      if (sig.blockedBySentiment) {
-        delete pendingSignals[sym];
-        logEntryBlocked(sym, 'sentiment_contradiction', {
-          sentimentScore: sig.sentimentScore,
-          direction: sig.direction,
-          regime: effectiveReq.regime,
-        });
-        continue;
-      }
-      if (!sig.direction || sig.score < effectiveReq.minScore || sig.activeSignals < effectiveReq.minActiveSignals) {
-        delete pendingSignals[sym];
-        logEntryBlocked(sym, 'signal_threshold_not_met', {
-          direction: sig.direction || null,
-          score: sig.score,
-          minScore: effectiveReq.minScore,
-          minActiveSignals: effectiveReq.minActiveSignals,
-          activeSignals: sig.activeSignals,
-          regime: effectiveReq.regime,
-        });
-        continue;
-      }
+      if (!sig.direction || sig.score < (state.params.minScore || 2)) continue;
 
-      if (higherTf.bias !== 'neutral' && sig.direction && higherTf.bias !== sig.direction) {
-        logEntryBlocked(sym, 'higher_timeframe_mismatch', {
-          direction: sig.direction,
-          higherTimeframeBias: higherTf.bias,
-          reason: higherTf.reason,
-          regime: effectiveReq.regime,
-        });
-        continue;
-      }
-
-      const setupKey = setupFingerprint(sym, sig.direction, sig.reasons);
-      const setupCooldownUntil = Number(state.setupCooldowns?.[setupKey] || 0);
-      if (setupCooldownUntil > Date.now()) {
-        logEntryBlocked(sym, 'setup_cooldown_active', {
-          setupKey,
-          until: setupCooldownUntil,
-          regime: effectiveReq.regime,
-        });
-        continue;
-      }
-
-      const existingPos = state.openPositions[sym];
-      if (existingPos && existingPos.direction === sig.direction) {
-        logEntryBlocked(sym, 'open_position_same_direction', {
-          direction: sig.direction,
-          existingEntryPrice: existingPos.entryPrice,
-          regime: effectiveReq.regime,
-        });
-        continue;
-      }
-
-      if (existingPos && existingPos.direction !== sig.direction) {
-        logger.warn('MAIN', 'Closing opposite position before reverse entry', {
-          symbol: sym,
-          existingDirection: existingPos.direction,
-          nextDirection: sig.direction,
-          regime: effectiveReq.regime,
-        });
-        const reversed = executor.exit(sym, 'signal_reverse');
-        if (!reversed) {
-          logEntryBlocked(sym, 'reverse_close_failed', {
-            existingDirection: existingPos.direction,
-            attemptedDirection: sig.direction,
-            regime: effectiveReq.regime,
-          });
-          continue;
-        }
-      }
-
+      // ── Drawdown check (only essential safety) ─────────────────────────
       const dd = risk.calcDrawdown(state.capital, state.peakCapital);
-      const pre = risk.preTradChecks({
-        symbol: sym,
-        direction: sig.direction,
-        openPositions: state.openPositions,
-        drawdown: dd,
-        params: state.params,
-        cooldowns: state.cooldowns,
-        recentLossBySymbol: state.recentLossBySymbol,
-        winRateBuffer: state.winRateBuffer,
-        mode: state.mode,
-      });
-      if (!pre.allowed) {
-        logEntryBlocked(sym, 'pretrade_guard', { guardReason: pre.reason, regime: effectiveReq.regime });
-        continue;
-      }
+      if (dd >= 0.12) continue;  // hard stop at 12%
 
-      const corrGate = correlation.canOpen(sym, state.openPositions);
-      if (!corrGate.allowed) {
-        logEntryBlocked(sym, 'correlation_gate', { guardReason: corrGate.reason, coefficient: corrGate.coefficient, regime: effectiveReq.regime });
-        continue;
-      }
+      // ── Cooldown check ─────────────────────────────────────────────────
+      const cooldownUntil = state.cooldowns[sym];
+      if (cooldownUntil && Date.now() < cooldownUntil) continue;
 
-      const fp = memoryMod.fingerprint(ind, sym);
-      const mem = memoryMod.checkCondition(fp);
-      if (mem.skip) {
-        logEntryBlocked(sym, 'memory_gate', { guardReason: mem.reason, regime: effectiveReq.regime });
-        continue;
-      }
-
+      // ── Size the position ──────────────────────────────────────────────
       const side = sig.direction === 'long' ? 'buy' : 'sell';
       const entryPrice = prices.executionPrice(sym, side);
       const sizing = risk.calcPositionSize(sym, sig.direction, entryPrice, ind.atr7, state.params, state.capital, state.openPositions);
-      if (!sizing) {
-        logEntryBlocked(sym, 'position_sizing_rejected', { regime: effectiveReq.regime });
-        continue;
-      }
+      if (!sizing) continue;
 
-      const currentExposure = risk.totalOpenExposure(state.openPositions);
+      let size = sizing.size;
       const maxExposure = risk.MAX_TOTAL_EXPOSURE_WITH_TOLERANCE;
-      const remainingExposure = Number((maxExposure - currentExposure).toFixed(8));
-      if (remainingExposure <= 0) {
-        logEntryBlocked(sym, 'exposure_cap_reached', { currentExposure, maxExposure, regime: effectiveReq.regime });
-        continue;
-      }
+      const currentExposure = risk.totalOpenExposure(state.openPositions);
+      const remaining = maxExposure - currentExposure;
+      if (remaining <= 0) break;
+      if (size * entryPrice > remaining) size = remaining / entryPrice;
+      if (size <= 0) continue;
 
-      const corrAdjustedRisk = correlation.portfolioCorrelationRisk(state.openPositions) + sizing.riskAmount;
-      if (corrAdjustedRisk > state.capital * 0.15) {
-        logEntryBlocked(sym, 'correlation_adjusted_risk_cap', {
-          risk: Number(corrAdjustedRisk.toFixed(2)),
-          cap: Number((state.capital * 0.15).toFixed(2)),
-          regime: effectiveReq.regime,
-        });
-        continue;
-      }
+      const riskAmount = Number((size * sizing.stopDistance).toFixed(8));
 
-      const volMul = correlation.positionVolMultiplier(sym);
-      const sizeMultiplier = (ins.sizeMultiplier || 1) * memoryMod.sizeMultiplier(fp) * volMul;
-      let size = Number((sizing.size * sizeMultiplier).toFixed(8));
-      if (size <= 0) {
-        logEntryBlocked(sym, 'size_after_multipliers_invalid', { regime: effectiveReq.regime });
-        continue;
-      }
-
-      const maxSizeByExposure = Number((remainingExposure / entryPrice).toFixed(8));
-      if (size > maxSizeByExposure) {
-        size = maxSizeByExposure;
-      }
-      if (size <= 0) {
-        logEntryBlocked(sym, 'size_after_exposure_clamp_invalid', { currentExposure, maxExposure, regime: effectiveReq.regime });
-        continue;
-      }
-
-      const proposedExposure = Number((size * entryPrice).toFixed(8));
-      if (currentExposure + proposedExposure > maxExposure + 1e-8) {
-        logEntryBlocked(sym, 'exposure_cap_exceeded', { currentExposure, proposedExposure, maxExposure, regime: effectiveReq.regime });
-        continue;
-      }
-
-      const adjustedRiskAmount = Number((size * sizing.stopDistance).toFixed(8));
-
-      // Enter the trade immediately — don't wait for agent review
-      await executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
-
-      // ── Dual-agent review runs in background (advisory, not blocking) ────
-      agents.smartReview({
-        symbol: sym,
-        direction: sig.direction,
+      // ── ENTER THE TRADE ────────────────────────────────────────────────
+      logger.trade('MAIN', `SIGNAL ${sig.direction.toUpperCase()} ${sym}`, {
         score: sig.score,
         reasons: sig.reasons,
-        riskAmount: adjustedRiskAmount,
-        regime: effectiveReq.regime,
-        indicators: ind,
-        sentiment: sig.sentimentScore,
-        higherTfBias: higherTf.bias,
-      }, effectiveReq.minScore).catch(err => {
-        logger.warn('AGENTS', 'Background review failed', { symbol: sym, error: err.message });
+        price: entryPrice,
       });
+
+      await executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, riskAmount, sig.reasons, 0);
+
+      // Agent review in background (advisory only)
+      agents.smartReview({
+        symbol: sym, direction: sig.direction, score: sig.score,
+        reasons: sig.reasons, riskAmount, regime: 'normal',
+        indicators: ind, sentiment: 0, higherTfBias: 'neutral',
+      }, state.params.minScore || 2).catch(() => {});
       
       // Verify position was created
       if (!state.openPositions[sym]) {

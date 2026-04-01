@@ -116,6 +116,18 @@ function atr(candles, period = 7) {
   return trs.reduce((a, b) => a + b, 0) / period;
 }
 
+// ─── Support & Resistance (recent swing highs/lows) ─────────────────────────
+function supportResistance(candles, lookback = 20) {
+  if (!candles || candles.length < lookback) return { support: null, resistance: null };
+  const recent = candles.slice(-lookback);
+  const highs = recent.map(c => c.high);
+  const lows = recent.map(c => c.low);
+  return {
+    resistance: Math.max(...highs),
+    support: Math.min(...lows),
+  };
+}
+
 // ─── Momentum (Rate of Change) ───────────────────────────────────────────────
 function momentum(prices, period = 3) {
   if (!prices || prices.length < period + 1) return null;
@@ -175,12 +187,15 @@ function calculateAll(candles, sessionStartIdx = 0) {
   // ── Previous close (for VWAP cross detection) ──────────────────────────────
   const prevClose = candles.length >= 2 ? candles[candles.length - 2].close : null;
 
-  // ── Volume stats for signal strength filtering ──────────────────────────
+  // ── Volume stats ────────────────────────────────────────────────────────
   const volumes = candles.map(c => c.volume || 0);
   const recentVol = volumes.slice(-1)[0] || 0;
   const avgVol = volumes.length >= 10
     ? volumes.slice(-10).reduce((a, b) => a + b, 0) / 10
     : recentVol || 1;
+
+  // ── Support & Resistance ───────────────────────────────────────────────
+  const sr = supportResistance(candles, 20);
 
   return {
     ema3, ema8, ema21, ema50,
@@ -195,9 +210,11 @@ function calculateAll(candles, sessionStartIdx = 0) {
     close: closes[closes.length - 1],
     volume: recentVol,
     avgVolume: avgVol,
+    support: sr.support,
+    resistance: sr.resistance,
   };
 }
 
 module.exports = {
-  ema, emaSeries, rsi, vwap, bollingerBands, macd, atr, momentum, calculateAll,
+  ema, emaSeries, rsi, vwap, bollingerBands, macd, atr, momentum, supportResistance, calculateAll,
 };
