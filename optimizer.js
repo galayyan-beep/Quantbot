@@ -623,6 +623,8 @@ Return ONLY JSON with new parameter values and brief reasons:
 
 // ─── Timer bootstrap — called from index.js ───────────────────────────────────
 function startTimers(getTradesFn, getInstrumentsFn, getOptimsFn) {
+  const agents = require('./agents');
+
   // Layer 1: every 5 minutes
   setInterval(async () => {
     try { await layer1Fast(getTradesFn()); }
@@ -640,6 +642,37 @@ function startTimers(getTradesFn, getInstrumentsFn, getOptimsFn) {
     try { await layer3Deep(getTradesFn(), getOptimsFn()); }
     catch (err) { logger.error('L3', err.message); }
   }, 2 * 60 * 60 * 1000);
+
+  // Agent Strategy Summit: every 4 hours — Bull + Bear debate and improve strategy
+  setInterval(async () => {
+    try {
+      const trades = getTradesFn();
+      if (!trades || trades.length < 10) return;
+      const stats = recentTradeStats(trades, 30);
+      if (!stats) return;
+
+      const result = await agents.strategySummit(stats, _state.params);
+      if (!result || !result.changes) return;
+
+      const PARAM_BOUNDS = {
+        riskPercent: [0.5, 2], atrMultiplier: [2.5, 3.5], minScore: [3, 5],
+        momentumThreshold: [0.002, 0.006], cooldownCandles: [5, 20],
+        minHoldCandles: [3, 12], maxPositions: [2, 5],
+      };
+
+      for (const change of result.changes) {
+        if (!change.param || !PARAM_BOUNDS[change.param]) continue;
+        const [lo, hi] = PARAM_BOUNDS[change.param];
+        const val = Math.max(lo, Math.min(hi, Number(change.value)));
+        if (isNaN(val)) continue;
+        const before = _state.params[change.param];
+        _state.params[change.param] = val;
+        logger.optim('SUMMIT', `Param adjusted by agent consensus`, {
+          param: change.param, before, after: val, reason: change.reason,
+        });
+      }
+    } catch (err) { logger.error('SUMMIT', err.message); }
+  }, 4 * 60 * 60 * 1000);
 }
 
 async function evaluatePaperReadiness(payload) {

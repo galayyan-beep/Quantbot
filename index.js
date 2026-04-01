@@ -14,6 +14,7 @@ const sentiment = require('./sentiment');
 const correlation = require('./correlation');
 const { runBacktest } = require('./backtest');
 const { pingInternet, probeCapitalHosts } = require('./capitalApi');
+const agents = require('./agents');
 
 const {
   INITIAL_CAPITAL,
@@ -839,6 +840,29 @@ async function tradingLoop(state, candleHistory) {
 
       const adjustedRiskAmount = Number((size * sizing.stopDistance).toFixed(8));
 
+      // ── Dual-agent review: Bull + Bear must agree before entry ──────────
+      const agentReview = await agents.smartReview({
+        symbol: sym,
+        direction: sig.direction,
+        score: sig.score,
+        reasons: sig.reasons,
+        riskAmount: adjustedRiskAmount,
+        regime: effectiveReq.regime,
+        indicators: ind,
+        sentiment: sig.sentimentScore,
+        higherTfBias: higherTf.bias,
+      }, effectiveReq.minScore);
+
+      if (!agentReview.approved) {
+        logEntryBlocked(sym, 'agent_review_rejected', {
+          reason: agentReview.reason,
+          bull: agentReview.bull.vote,
+          bear: agentReview.bear.vote,
+          regime: effectiveReq.regime,
+        });
+        continue;
+      }
+
       await executor.enter(sym, sig.direction, size, sizing.stopLoss, sizing.takeProfit, adjustedRiskAmount, sig.reasons, sig.sentimentScore);
       
       // Verify position was created
@@ -1014,7 +1038,7 @@ async function main() {
           open: Object.keys(state.openPositions).length,
           paperTrading: state.PAPER_TRADING,
           liveTrading: state.LIVE_TRADING,
-          anthropicTokens: optimizer.getTokensUsed(),
+          anthropicTokens: optimizer.getTokensUsed() + agents.getTokensUsed(),
         });
       }
     } catch (err) {
