@@ -49,7 +49,7 @@ const DEFAULT_PARAMS = {
 };
 
 // ─── Risk constants ──────────────────────────────────────────────────────────
-const MAX_TOTAL_EXPOSURE = 100;
+const MAX_TOTAL_EXPOSURE = 10000;  // matches paper capital
 const EXPOSURE_TOLERANCE_PCT = 0.02;
 const MAX_CRYPTO_BASKET_EXPOSURE = 70;
 
@@ -57,7 +57,7 @@ const MAX_CRYPTO_BASKET_EXPOSURE = 70;
 const TICK_INTERVAL_MS = 2000;
 const MAX_CANDLE_HIST = 220;
 const WARMUP_CANDLES = 25;  // faster startup — trade sooner
-const INITIAL_CAPITAL = 100;  // $100 live account
+const INITIAL_CAPITAL = 10000;  // $10,000 for paper trading (will be $100 for live)
 
 // ─── Correlation groups ──────────────────────────────────────────────────────
 const CORRELATION_GROUPS = [
