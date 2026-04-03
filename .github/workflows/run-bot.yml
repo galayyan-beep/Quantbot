@@ -1,8 +1,6 @@
-name: Quantbot — Always Running
+name: Quantbot Paper Trading
 
 on:
-  # Staggered schedule: runs every 5 hours so sessions overlap with the 5h48m runtime.
-  # This ensures the bot is ALWAYS live with zero gaps.
   schedule:
     - cron: '0 */5 * * *'
   workflow_dispatch:
@@ -11,8 +9,8 @@ on:
       - main
 
 concurrency:
-  group: quantbot-live
-  cancel-in-progress: false   # don't kill a running session when a new one starts — let it finish
+  group: quantbot
+  cancel-in-progress: true    # kill old run when new one starts
 
 permissions:
   contents: write
@@ -20,9 +18,9 @@ permissions:
 
 jobs:
   run-bot:
-    name: Quantbot LIVE (continuous)
+    name: Quantbot Paper Trading
     runs-on: ubuntu-latest
-    timeout-minutes: 355       # just under 6h GitHub max
+    timeout-minutes: 350
 
     steps:
       - name: Checkout repository
@@ -40,23 +38,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Run for 5h 48m — leaves 7 min buffer for commit + next session startup
-      - name: Run Quantbot
-        run: timeout 20880 node index.js || true
+      - name: Run Quantbot (paper trading)
+        run: |
+          timeout 20400 node index.js
+          echo "Bot exited normally"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_MODEL:   ${{ secrets.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022' }}
           CAPITAL_API_KEY:   ${{ secrets.CAPITAL_API_KEY }}
           CAPITAL_API_SECRET: ${{ secrets.CAPITAL_API_SECRET }}
           CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
           CAPITAL_ACCOUNT_ID: ${{ secrets.CAPITAL_ACCOUNT_ID }}
-          CAPITAL_TARGET_AVAILABLE_BALANCE: '100'
           NEWS_API_KEY:      ${{ secrets.NEWS_API_KEY }}
           LIVE_TRADING:      'false'
-          PAPER_TRADING:     'true'
           NODE_ENV:          production
 
       - name: Commit trading state
+        if: always()
         run: |
           git config user.name  "Quantbot[bot]"
           git config user.email "quantbot@users.noreply.github.com"
@@ -65,36 +62,7 @@ jobs:
             echo "No state changes to commit."
           else
             git commit -m "chore(data): trading state update [$(date -u '+%Y-%m-%d %H:%M UTC')]"
-            git push
+            git push || echo "Push failed — possible conflict"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  daily-digest:
-    name: Post Daily P&L Digest
-    runs-on: ubuntu-latest
-    needs: []
-    if: github.event_name == 'schedule'
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - run: npm ci
-
-      - name: Generate and post daily digest
-        run: node scripts/post-summary.js
-        env:
-          GITHUB_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CAPITAL_API_KEY:   ${{ secrets.CAPITAL_API_KEY }}
-          CAPITAL_API_SECRET: ${{ secrets.CAPITAL_API_SECRET }}
-          CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
-          NEWS_API_KEY:      ${{ secrets.NEWS_API_KEY }}

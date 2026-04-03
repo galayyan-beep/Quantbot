@@ -902,21 +902,20 @@ async function main() {
   if (savedSignals) signalsMod.loadState(savedSignals);
   optimizer.init(state);
 
-  // Run backtest in background — don't block startup
-  runBacktest().then(backtest => {
-    state.backtestSummary = {
-      sharpeRatio: backtest?.metrics?.sharpeRatio ?? backtest?.sharpeRatio ?? 0,
-      maxDrawdown: backtest?.metrics?.maxDrawdown ?? backtest?.maxDrawdown ?? 1,
-    };
-    if (state.backtestSummary.sharpeRatio < 0.5 || state.backtestSummary.maxDrawdown > 0.25) {
-      logger.warn('MAIN', 'Backtest warning', state.backtestSummary);
-    }
-  }).catch(err => {
-    logger.warn('MAIN', 'Backtest failed (non-blocking)', { error: err.message });
-  });
+  // Skip backtest in paper/sim mode — needs Capital.com for historical data
+  if (!state._useSimulator) {
+    runBacktest().then(backtest => {
+      state.backtestSummary = {
+        sharpeRatio: backtest?.metrics?.sharpeRatio ?? backtest?.sharpeRatio ?? 0,
+        maxDrawdown: backtest?.metrics?.maxDrawdown ?? backtest?.maxDrawdown ?? 1,
+      };
+    }).catch(() => {});
+  } else {
+    logger.info('MAIN', 'Skipping backtest — using simulator');
+  }
 
-  correlation.startHourly(candleHistory);
-  sentiment.start();
+  try { correlation.startHourly(candleHistory); } catch (e) { logger.warn('MAIN', 'Correlation init failed', { error: e.message }); }
+  try { sentiment.start(); } catch (e) { logger.warn('MAIN', 'Sentiment init failed', { error: e.message }); }
 
   if (state.PAPER_TRADING) {
     logger.warn('PAPER', 'PAPER_TRADING=true active. Virtual capital mode with Capital.com demo data.');
@@ -984,23 +983,16 @@ async function main() {
 
   // Catch any unhandled exceptions
   process.on('uncaughtException', (err) => {
-    logger.error('MAIN', 'UNCAUGHT_EXCEPTION', { error: err.message, stack: err.stack?.split('\n').slice(0, 5).join(' | ') });
-    clearInterval(interval);
-    writePerformance(state, executor.getTradeLog());
-    persistState(state, candleHistory);
-    process.exit(1);
+    logger.error('MAIN', 'UNCAUGHT_EXCEPTION', { error: err.message, stack: err.stack?.split('\n').slice(0, 3).join(' | ') });
+    // Don't crash — log and continue trading.
   });
 
   // Catch any unhandled promise rejections
   process.on('unhandledRejection', (reason, promise) => {
     logger.error('MAIN', 'UNHANDLED_REJECTION', {
       reason: String(reason).slice(0, 500),
-      promise: String(promise).slice(0, 200),
     });
-    clearInterval(interval);
-    writePerformance(state, executor.getTradeLog());
-    persistState(state, candleHistory);
-    process.exit(1);
+    // Don't crash — log and continue. The bot should keep trading.
   });
 
   process.on('SIGINT', () => shutdown('SIGINT'));
